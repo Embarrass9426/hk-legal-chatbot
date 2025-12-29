@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@config "../tailwind.config.js";
+
+/* Basic Markdown Styling for Chat */
+.prose h1 { @apply text-xl font-bold mb-4 mt-2 text-slate-800 dark:text-slate-100; }
+.prose h2 { @apply text-lg font-bold mb-3 mt-2 text-slate-800 dark:text-slate-100; }
+.prose h3 { @apply text-base font-bold mb-2 mt-1 text-slate-800 dark:text-slate-100; }
+.prose p { @apply mb-3 last:mb-0; }
+.prose ul { @apply list-disc ml-5 mb-3; }
+.prose ol { @apply list-decimal ml-5 mb-3; }
+.prose li { @apply mb-1; }
+.prose strong { @apply font-bold; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
