@@ -153,33 +153,40 @@ const ChatInterface = ({ darkMode, toggleDarkMode }) => {
       {/* Chat Area */}
       <main className="flex-1 overflow-y-auto p-6 space-y-6">
         <div className="max-w-4xl mx-auto space-y-6">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] ${
-                msg.role === 'user' 
-                  ? 'bg-blue-600 text-white rounded-l-2xl rounded-tr-2xl' 
-                  : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-r-2xl rounded-tl-2xl'
-              } p-4 shadow-sm`}>
-                <div className={`text-sm leading-relaxed prose max-w-none ${msg.role === 'user' ? 'text-white' : ''}`}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {msg.content}
-                  </ReactMarkdown>
-                </div>
-                
-                {msg.references && msg.references.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">References</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {msg.references.map(ref => (
-                        <ReferenceCard key={ref.id} reference={ref} />
-                      ))}
-                    </div>
+          {messages.map((msg) => {
+            // Don't render assistant messages that are empty (no content and no references)
+            if (msg.role === 'assistant' && !msg.content && (!msg.references || msg.references.length === 0)) {
+              return null;
+            }
+            
+            return (
+              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] ${
+                  msg.role === 'user' 
+                    ? 'bg-blue-600 text-white rounded-l-2xl rounded-tr-2xl' 
+                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-r-2xl rounded-tl-2xl'
+                } p-4 shadow-sm`}>
+                  <div className={`text-sm leading-relaxed prose max-w-none ${msg.role === 'user' ? 'text-white' : ''}`}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
                   </div>
-                )}
+                  
+                  {msg.references && msg.references.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+                      <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">References</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {msg.references.map(ref => (
+                          <ReferenceCard key={ref.id} reference={ref} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-          {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
+            );
+          })}
+          {isLoading && (messages[messages.length - 1]?.role !== 'assistant' || !messages[messages.length - 1]?.content) && (
             <div className="flex justify-start">
               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-r-2xl rounded-tl-2xl p-4 shadow-sm">
                 <div className="flex gap-1">

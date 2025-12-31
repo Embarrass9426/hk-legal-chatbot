@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 import utils
 import scraper
 import vector_store
@@ -48,23 +48,12 @@ class ChatRequest(BaseModel):
 async def generate_chat_responses(message: str):
     try:
         # 1. Extract Keywords and Target Law
-        analysis = utils.extract_keywords(message, llm)
-        target_law = analysis.get("target_law")
+        analysis = await utils.extract_keywords(message, llm)
         print(f"Analysis: {analysis}")
 
-        # 2. Dynamic Scraping (if target law identified)
-        # For demo: if user mentions "Cap 1", we scrape it if not already indexed
-        if target_law and "Cap" in target_law:
-            cap_no = "".join(filter(str.isdigit, target_law))
-            if cap_no:
-                print(f"Triggering scraper for Cap {cap_no}...")
-                sections = hk_scraper.scrape_ordinance(cap_no)
-                if sections:
-                    print(f"Scraped {len(sections)} sections. Upserting to Pinecone...")
-                    vector_manager.upsert_documents(sections)
-
-        # 3. Retrieval from Vector Store
-        context_docs = vector_manager.search(message, k=3)
+        # 2. Retrieval from Vector Store
+        # We search for relevant sections in our ingested database
+        context_docs = vector_manager.search(message, k=5)
         context_text = "\n\n".join([doc.page_content for doc in context_docs])
         
         # Prepare references for the frontend
@@ -75,9 +64,19 @@ async def generate_chat_responses(message: str):
             references.append(ref)
 
         # 3. Build Augmented Prompt
-        system_content = "You are a helpful Hong Kong legal assistant. Provide accurate information based on Hong Kong law."
-        if context_text:
-            system_content += f"\n\nUse the following legal context to answer the user's question. If the context doesn't contain the answer, say you don't know but provide what information you can from the context. Always cite the specific Ordinance or Case mentioned in the context.\n\nCONTEXT:\n{context_text}"
+        system_content = """You are an expert Hong Kong legal assistant specializing in the Employees' Compensation Ordinance (Cap. 282).
+Your goal is to help employees understand their rights regarding workplace injuries and insurance.
+
+Instructions:
+1. Use the provided legal context to answer the user's question.
+2. If the context doesn't contain the answer, state that you don't have enough information but provide general guidance based on the context.
+3. Always cite the specific Section (e.g., [1] Cap. 282, s. 5) when referring to the law.
+4. Be empathetic but professional.
+5. If the user asks about a specific injury (like breaking a leg), explain if it's covered under "arising out of and in the course of employment".
+
+CONTEXT:
+"""
+        system_content += context_text
 
         messages = [
             SystemMessage(content=system_content),

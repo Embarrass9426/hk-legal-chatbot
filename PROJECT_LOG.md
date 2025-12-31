@@ -52,10 +52,21 @@
     - Updated `ChatInterface.jsx` to handle and display structured `references` using the `ReferenceCard` component.
 - **Documentation**:
     - Created `GITHUB_WORKFLOW.md` to provide a quick reference for Git commands and project workflow.
+- **Pivot to PDF-based RAG**:
+    - Shifted primary data source to **e-Legislation** PDFs per senior's suggestion.
+    - Focused initial use case on **Employees' Compensation Ordinance (Cap. 282)**.
+    - Updated project plan to include PDF parsing and section-based chunking.
+    - Implemented `backend/pdf_parser.py` using **Playwright** for downloading and **PyMuPDF** for parsing.
+    - Successfully ingested 157 sections of Cap. 282 into Pinecone.
+    - Refined LLM system prompt and keyword extraction for Employee Compensation scenarios.
+- **UI/UX Refinements**:
+    - **Loading Animation Timing**: Fixed the loading indicator logic to remain visible until the server is ready to stream the output, preventing a "frozen" UI during backend processing.
+    - **Empty Bubble Fix**: Implemented conditional rendering to prevent empty assistant chat bubbles from appearing while the RAG pipeline is running.
+    - **Streaming Stability**: Improved SSE (Server-Sent Events) handling in the frontend to ensure smooth transitions between "loading" and "answering" states.
 
 ### 🛠️ Current Status
-- **Frontend**: Now displays clickable reference cards for legal citations.
-- **Backend**: Fully functional RAG pipeline with dynamic scraping capabilities.
+- **Frontend**: Now displays clickable reference cards for legal citations and has a polished loading experience.
+- **Backend**: Fully functional RAG pipeline with dynamic scraping and PDF parsing capabilities.
 - **Next Steps**: 
     - Refine scraper selectors for more granular section extraction.
     - Implement caching to avoid redundant scraping of the same ordinances.

@@ -12,3 +12,5 @@ langchain-huggingface
 sentence-transformers
 playwright
 langchain-pinecone
+pymupdf
+pdfplumber

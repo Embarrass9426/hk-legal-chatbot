@@ -24,11 +24,10 @@ Build a Retrieval-Augmented Generation (RAG) system for Hong Kong legal material
 - **Embedding Model**: HuggingFaceEmbedding
 - **Backend**: Python (FastAPI + LangChain)
 - **Frontend**: React
-- **Web Scraping**: Beautiful Soup + Playwright (Python)
+- **Web Scraping**: PDF Downloading + PDF Parsing (PyMuPDF/pdfplumber)
 - **Data Sources**: 
-    - [HKLII](https://www.hklii.hk/) (Primary: Ordinances & Case Law)
-    - [e-Legislation](https://www.elegislation.gov.hk/) (Statutes)
-    - [Judiciary](https://www.judiciary.hk/) (Judgments)
+    - [e-Legislation](https://www.elegislation.gov.hk/) (Primary: PDF Statutes)
+    - [HKLII](https://www.hklii.hk/) (Secondary: Case Law)
 
 ---
 
@@ -87,15 +86,16 @@ The system must strictly follow standard Hong Kong legal citation styles:
 - [x] Integrate **DeepSeek 3.2 API** for "Citation-First" generation.
 - [ ] Post-process LLM output to map citations to `source_url`.
 
-### Phase 3: Data Ingestion & Investigation (Beautiful Soup)
-- [x] Create **Investigation Script** to map HKLII HTML structure.
-- [x] Scrape HK Ordinances and Case Law from **HKLII** using **Beautiful Soup**.
-- [x] Chunk documents while preserving section headers.
-- [x] Extract metadata (Title, Cap No., Section, URL).
+### Phase 3: Data Ingestion & PDF Parsing (e-Legislation)
+- [ ] Download **Employees' Compensation Ordinance (Cap. 282)** PDF from e-Legislation.
+- [ ] Implement **PDF Parser** to extract text while preserving section/clause hierarchy.
+- [ ] Chunk documents by **Section/Clause** to ensure precise referencing.
+- [ ] Extract metadata (Cap No., Section, Clause, Page, URL).
 
-### Phase 4: Vector Database Setup (Pinecone)
-- [x] Generate embeddings using **HuggingFaceEmbedding**.
-- [x] Upsert to **Pinecone** with full metadata payload.
+### Phase 4: Vector Database & RAG Refinement
+- [ ] Generate embeddings for parsed PDF chunks.
+- [ ] Upsert to **Pinecone** with granular metadata.
+- [ ] Refine LLM prompt to prioritize **Employee Compensation** scenarios.
 
 ---
 
