@@ -75,27 +75,27 @@ The system must strictly follow standard Hong Kong legal citation styles:
 ## 🚀 Implementation Roadmap
 
 ### Phase 1: Frontend UI/UX (React)
-- [ ] Design and build the **React** interface.
-- [ ] Create mock-up for answer display and reference cards.
-- [ ] Implement clickable reference links (opening in new tabs).
+- [x] Design and build the **React** interface.
+- [x] Create mock-up for answer display and reference cards.
+- [x] Implement clickable reference links (opening in new tabs).
 - [ ] Ensure responsive design for legal research on different devices.
 
 ### Phase 2: Backend & RAG Pipeline (Python/FastAPI)
-- [ ] Set up **FastAPI** server.
-- [ ] Implement **Keyword Extraction** logic to identify target laws/cases from queries.
-- [ ] Implement **LangChain** retrieval logic with metadata filtering.
-- [ ] Integrate **DeepSeek 3.2 API** for "Citation-First" generation.
+- [x] Set up **FastAPI** server.
+- [x] Implement **Keyword Extraction** logic to identify target laws/cases from queries.
+- [x] Implement **LangChain** retrieval logic with metadata filtering.
+- [x] Integrate **DeepSeek 3.2 API** for "Citation-First" generation.
 - [ ] Post-process LLM output to map citations to `source_url`.
 
 ### Phase 3: Data Ingestion & Investigation (Beautiful Soup)
-- [ ] Create **Investigation Script** to map HKLII HTML structure.
-- [ ] Scrape HK Ordinances and Case Law from **HKLII** using **Beautiful Soup**.
-- [ ] Chunk documents while preserving section headers.
-- [ ] Extract metadata (Title, Cap No., Section, URL).
+- [x] Create **Investigation Script** to map HKLII HTML structure.
+- [x] Scrape HK Ordinances and Case Law from **HKLII** using **Beautiful Soup**.
+- [x] Chunk documents while preserving section headers.
+- [x] Extract metadata (Title, Cap No., Section, URL).
 
 ### Phase 4: Vector Database Setup (Pinecone)
-- [ ] Generate embeddings using **HuggingFaceEmbedding**.
-- [ ] Upsert to **Pinecone** with full metadata payload.
+- [x] Generate embeddings using **HuggingFaceEmbedding**.
+- [x] Upsert to **Pinecone** with full metadata payload.
 
 ---
 

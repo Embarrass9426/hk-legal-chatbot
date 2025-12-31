@@ -31,3 +31,35 @@
 
 ---
 *Log created on 2025-12-29*
+
+## 📅 December 31, 2025
+
+### ✅ Completed Tasks
+- **HKLII Investigation**: 
+    - Created `backend/scripts/inspect_hklii.py` to analyze HKLII's HTML structure.
+    - Identified that HKLII is a **Vuetify SPA**, necessitating a shift from static scraping to **Playwright** for dynamic content rendering.
+- **Keyword Extraction**:
+    - Implemented `backend/utils.py` using DeepSeek to extract `target_law`, `section`, and `keywords` from user queries.
+- **Dynamic Scraper**:
+    - Built `backend/scraper.py` using Playwright to fetch, parse, and chunk ordinances (e.g., Cap 1) directly from HKLII.
+- **Vector Store Integration**:
+    - Implemented `backend/vector_store.py` using **Pinecone** for vector storage and **HuggingFace** (`all-MiniLM-L6-v2`) for local embeddings.
+    - Configured automatic index creation and document upserting.
+- **Full RAG Workflow Integration**:
+    - Updated `backend/main.py` to orchestrate the dynamic RAG pipeline: Query Analysis -> Scraping (if needed) -> Vector Search -> Augmented Generation.
+    - Implemented reference streaming to the frontend.
+- **Frontend Enhancements**:
+    - Updated `ChatInterface.jsx` to handle and display structured `references` using the `ReferenceCard` component.
+- **Documentation**:
+    - Created `GITHUB_WORKFLOW.md` to provide a quick reference for Git commands and project workflow.
+
+### 🛠️ Current Status
+- **Frontend**: Now displays clickable reference cards for legal citations.
+- **Backend**: Fully functional RAG pipeline with dynamic scraping capabilities.
+- **Next Steps**: 
+    - Refine scraper selectors for more granular section extraction.
+    - Implement caching to avoid redundant scraping of the same ordinances.
+    - Expand scraping to include Case Law databases on HKLII.
+
+---
+*Log updated on 2025-12-31*
