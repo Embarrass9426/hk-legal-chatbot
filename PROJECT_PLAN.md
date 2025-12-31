@@ -24,10 +24,10 @@ Build a Retrieval-Augmented Generation (RAG) system for Hong Kong legal material
 - **Embedding Model**: HuggingFaceEmbedding
 - **Backend**: Python (FastAPI + LangChain)
 - **Frontend**: React
-- **Web Scraping**: Beautiful Soup (Python)
+- **Web Scraping**: Beautiful Soup + Playwright (Python)
 - **Data Sources**: 
+    - [HKLII](https://www.hklii.hk/) (Primary: Ordinances & Case Law)
     - [e-Legislation](https://www.elegislation.gov.hk/) (Statutes)
-    - [HKLII](https://www.hklii.org/) (Case Law)
     - [Judiciary](https://www.judiciary.hk/) (Judgments)
 
 ---
@@ -82,12 +82,14 @@ The system must strictly follow standard Hong Kong legal citation styles:
 
 ### Phase 2: Backend & RAG Pipeline (Python/FastAPI)
 - [ ] Set up **FastAPI** server.
+- [ ] Implement **Keyword Extraction** logic to identify target laws/cases from queries.
 - [ ] Implement **LangChain** retrieval logic with metadata filtering.
 - [ ] Integrate **DeepSeek 3.2 API** for "Citation-First" generation.
 - [ ] Post-process LLM output to map citations to `source_url`.
 
-### Phase 3: Data Ingestion & Cleaning (Beautiful Soup)
-- [ ] Scrape HK Ordinances and Case Law using **Beautiful Soup**.
+### Phase 3: Data Ingestion & Investigation (Beautiful Soup)
+- [ ] Create **Investigation Script** to map HKLII HTML structure.
+- [ ] Scrape HK Ordinances and Case Law from **HKLII** using **Beautiful Soup**.
 - [ ] Chunk documents while preserving section headers.
 - [ ] Extract metadata (Title, Cap No., Section, URL).
 

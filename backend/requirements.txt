@@ -5,3 +5,10 @@ langchain-openai
 python-dotenv
 pydantic
 cors
+beautifulsoup4
+httpx
+pinecone-client
+langchain-huggingface
+sentence-transformers
+playwright
+langchain-pinecone

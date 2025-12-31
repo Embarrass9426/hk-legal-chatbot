@@ -71,7 +71,19 @@ const ChatInterface = ({ darkMode, toggleDarkMode }) => {
           
           try {
             const data = JSON.parse(trimmedLine.slice(6));
-            if (data.answer) {
+            if (data.references) {
+              setMessages(prev => {
+                const newMessages = [...prev];
+                const lastMsg = newMessages[newMessages.length - 1];
+                if (lastMsg.id === 'streaming-msg') {
+                  newMessages[newMessages.length - 1] = { 
+                    ...lastMsg, 
+                    references: data.references 
+                  };
+                }
+                return newMessages;
+              });
+            } else if (data.answer) {
               accumulatedContent += data.answer;
               setMessages(prev => {
                 const newMessages = [...prev];
