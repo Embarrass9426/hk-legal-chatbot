@@ -7,9 +7,9 @@ def inspect_url(url):
     print(f"Inspecting: {url}")
     print(f"{'='*50}")
     
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+    with sync_playwright() as p: # Launch Playwright context
+        browser = p.chromium.launch(headless=True) # Headless browser
+        page = browser.new_page() # New page
         
         try:
             # Navigate to URL

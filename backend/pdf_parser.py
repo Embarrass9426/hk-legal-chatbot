@@ -51,52 +51,64 @@ class PDFLegalParser:
 
     def parse_sections(self):
         """
-        Parses the PDF and attempts to split it into sections.
+        Parses the PDF and attempts to split it into sections, tracking page numbers.
         """
         if not os.path.exists(self.pdf_path):
             return []
 
         doc = fitz.open(self.pdf_path)
-        full_text = ""
-        for page in doc:
-            # Filter out headers/footers if possible, or just get all text
-            full_text += page.get_text()
-
-        # HK Ordinances usually have sections starting with a number followed by a title
-        # or "Section X". 
-        # We'll look for patterns like "\n5. Interpretation" or "\nSection 5"
         sections = []
         
-        # Split by "Section X" or "X. " at the start of a line
-        # We use a more complex regex to avoid matching numbers inside text
         # Pattern: Newline, then optional "Section ", then digits, then ". ", then Title
-        pattern = r'\n(?:Section\s+)?(\d+[A-Z]?)\.\s+([A-Z][^\n]+)'
+        pattern = r'(?:Section\s+)?(\d+[A-Z]?)\.\s+([A-Z][^\n]+)'
         
-        matches = list(re.finditer(pattern, full_text))
+        current_section = None
         
-        for i in range(len(matches)):
-            start = matches[i].start()
-            end = matches[i+1].start() if i+1 < len(matches) else len(full_text)
+        for page_num, page in enumerate(doc, start=1):
+            page_text = page.get_text()
             
-            section_no = matches[i].group(1)
-            section_title = matches[i].group(2).strip()
-            content = full_text[start:end].strip()
+            # Find all section headers on this page
+            matches = list(re.finditer(pattern, page_text))
             
-            # Skip very short chunks or table of contents
-            if len(content) < 100 or "Contents" in section_title:
-                continue
+            last_pos = 0
+            for i, match in enumerate(matches):
+                # If we were tracking a section, its content ends where this one starts
+                if current_section:
+                    current_section["content"] += page_text[last_pos:match.start()]
+                    sections.append(current_section)
+                
+                section_no = match.group(1)
+                section_title = match.group(2).strip()
+                
+                # Start a new section
+                current_section = {
+                    "id": f"hk-cap{self.cap_number}-s{section_no}",
+                    "content": "", # Will be filled
+                    "title": f"Cap. {self.cap_number} - {section_title}",
+                    "citation": f"Cap. {self.cap_number}, s. {section_no}",
+                    "source_url": f"{self.url}#page={page_num}",
+                    "page": page_num,
+                    "type": "Ordinance"
+                }
+                last_pos = match.start()
+            
+            # Add the rest of the page to the current section
+            if current_section:
+                current_section["content"] += page_text[last_pos:]
+                last_pos = 0 # Reset for next page
 
-            sections.append({
-                "id": f"hk-cap{self.cap_number}-s{section_no}",
-                "content": content,
-                "title": f"Cap. {self.cap_number} - {section_title}",
-                "citation": f"Cap. {self.cap_number}, s. {section_no}",
-                "source_url": self.url,
-                "type": "Ordinance"
-            })
+        # Add the last section
+        if current_section:
+            sections.append(current_section)
             
+        # Post-process: filter out short/invalid sections
+        valid_sections = []
+        for s in sections:
+            if len(s["content"]) > 100 and "Contents" not in s["title"]:
+                valid_sections.append(s)
+
         doc.close()
-        return sections
+        return valid_sections
 
 if __name__ == "__main__":
     import asyncio

@@ -83,16 +83,17 @@ CONTEXT:
             HumanMessage(content=message)
         ]
         
-        # 4. Stream References first (optional, but good for UI)
-        if references:
-            yield f"data: {json.dumps({'references': references})}\n\n"
-
-        # 5. Stream Answer
+        # 4. Stream Answer
         print(f"Starting stream for message: {message}")
         async for chunk in llm.astream(messages):
             if chunk.content:
                 data = json.dumps({'answer': chunk.content})
                 yield f"data: {data}\n\n"
+
+        # 5. Stream References after the answer
+        if references:
+            yield f"data: {json.dumps({'references': references})}\n\n"
+        
         print("Stream finished")
     except Exception as e:
         print(f"Error in stream: {e}")
