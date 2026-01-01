@@ -41,16 +41,41 @@ class VectorStoreManager:
     def upsert_documents(self, documents):
         """
         Upserts a list of document dictionaries into Pinecone.
-        Each doc should have 'id', 'content', and 'metadata'.
+        Splits large documents into smaller chunks to avoid Pinecone metadata limits.
         """
         if not self.api_key:
             return
             
-        texts = [doc['content'] for doc in documents]
-        metadatas = [{k: v for k, v in doc.items() if k != 'content'} for doc in documents]
-        ids = [doc['id'] for doc in documents]
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
         
-        self.vector_store.add_texts(texts=texts, metadatas=metadatas, ids=ids)
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=2000,
+            chunk_overlap=200
+        )
+        
+        all_texts = []
+        all_metadatas = []
+        all_ids = []
+        
+        for doc in documents:
+            chunks = text_splitter.split_text(doc['content'])
+            for i, chunk in enumerate(chunks):
+                all_texts.append(chunk)
+                # Create a unique ID for each chunk
+                all_ids.append(f"{doc['id']}-chunk-{i}")
+                # Copy metadata and add chunk info
+                meta = {k: v for k, v in doc.items() if k != 'content'}
+                meta['chunk'] = i
+                all_metadatas.append(meta)
+        
+        # Upsert in batches to be safe
+        batch_size = 100
+        for i in range(0, len(all_texts), batch_size):
+            self.vector_store.add_texts(
+                texts=all_texts[i:i + batch_size], 
+                metadatas=all_metadatas[i:i + batch_size], 
+                ids=all_ids[i:i + batch_size]
+            )
 
     def search(self, query: str, k: int = 5):
         """

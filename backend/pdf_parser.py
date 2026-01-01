@@ -51,85 +51,110 @@ class PDFLegalParser:
 
     def parse_sections(self):
         """
-        Parses the PDF and attempts to split it into sections, tracking page labels and full titles.
+        Parses the PDF by:
+        1. Scanning all pages to build a map of printed page labels (e.g., "3A-10") to physical indices.
+        2. Extracting section numbers, titles, and page labels from the TOC (pages 1-9).
+        3. Extracting content between the identified physical pages.
         """
         if not os.path.exists(self.pdf_path):
             return []
 
         doc = fitz.open(self.pdf_path)
+        
+        # 1. Build label_to_idx manually by scanning page text (since doc.get_label() is empty)
+        label_to_idx = {}
+        for idx, page in enumerate(doc):
+            text = page.get_text()
+            lines = [l.strip() for l in text.split('\n') if l.strip()]
+            # Page labels like "1-12" or "3A-10" are usually at the bottom
+            for line in reversed(lines):
+                if re.match(r'^[A-Z\d]+-[\d]+$', line):
+                    # We only take the first one we find from the bottom
+                    if line not in label_to_idx:
+                        label_to_idx[line] = idx
+                    break
+
+        # 2. Extract from TOC (Hardcoded Pages 1-9)
+        toc_text = ""
+        for i in range(min(9, len(doc))):
+            toc_text += doc[i].get_text()
+        
+        toc_entries = []
+        lines = [l.strip() for l in toc_text.split('\n') if l.strip()]
+        
+        i = 0
+        while i < len(lines) - 1:
+            # Match section number like "5." or "18A."
+            if re.match(r'^\d+[A-Z]?\.$', lines[i]):
+                section_no = lines[i][:-1]
+                title_parts = []
+                page_label = ""
+                
+                # Look ahead for the page label
+                for j in range(i + 1, min(i + 10, len(lines))):
+                    if re.match(r'^[A-Z\d]+-[\d]+$', lines[j]):
+                        page_label = lines[j]
+                        # Move outer index to after this entry
+                        i = j 
+                        break
+                    else:
+                        title_parts.append(lines[j])
+                
+                if page_label:
+                    section_title = " ".join(title_parts)
+                    physical_idx = label_to_idx.get(page_label)
+                    
+                    if physical_idx is not None:
+                        toc_entries.append({
+                            "section_no": section_no,
+                            "title": section_title,
+                            "page_label": page_label,
+                            "physical_idx": physical_idx
+                        })
+            i += 1
+
+        # 3. Extract content
         sections = []
+        toc_entries.sort(key=lambda x: x["physical_idx"])
         
-        # Improved pattern: 
-        # 1. Optional "Section "
-        # 2. Section number (e.g., 5, 18A)
-        # 3. A dot and space
-        # 4. The title (starts with uppercase, can span multiple lines until a large block of text or next section)
-        pattern = r'(?:Section\s+)?(\d+[A-Z]?)\.\s+([A-Z][^.]+)'
-        
-        current_section = None
-        is_toc = True # Start by assuming we are in Table of Contents
-        
-        for page_num, page in enumerate(doc, start=1):
-            page_text = page.get_text()
+        for i, entry in enumerate(toc_entries):
+            start_idx = entry["physical_idx"]
+            # End index is the start of the next section
+            end_idx = toc_entries[i+1]["physical_idx"] if i+1 < len(toc_entries) else len(doc)
             
-            # Get the actual page label (e.g., "3A-10") if it exists, else use physical page
-            page_label = page.get_label() or str(page_num)
-            
-            # Simple heuristic to skip Table of Contents:
-            # If we see "PART" or "Section" followed by many dots "....", it's TOC
-            if is_toc:
-                if "........" in page_text or "CONTENTS" in page_text.upper():
-                    continue
-                else:
-                    is_toc = False # We've likely passed the TOC
+            if end_idx < start_idx:
+                end_idx = start_idx + 1
 
-            # Find all section headers on this page
-            # We use finditer but we need to be careful about multi-line titles
-            matches = list(re.finditer(pattern, page_text))
+            content = ""
+            for p_idx in range(start_idx, end_idx):
+                content += doc[p_idx].get_text()
             
-            last_pos = 0
-            for i, match in enumerate(matches):
-                # If we were tracking a section, its content ends where this one starts
-                if current_section:
-                    current_section["content"] += page_text[last_pos:match.start()]
-                    sections.append(current_section)
-                
-                section_no = match.group(1)
-                # Clean up the title: it might have newlines, so we join them
-                section_title = " ".join(match.group(2).split())
-                
-                # Start a new section
-                current_section = {
-                    "id": f"hk-cap{self.cap_number}-s{section_no}",
-                    "content": "", 
-                    "title": f"Cap. {self.cap_number} - {section_title}",
-                    "citation": f"Cap. {self.cap_number}, s. {section_no}",
-                    "source_url": f"{self.url}#page={page_num}",
-                    "page": page_label, # Use the label (e.g. 3A-10)
+            # Clean up: remove the next section's header if it's on the same page
+            if i+1 < len(toc_entries):
+                next_sec = toc_entries[i+1]
+                # Look for "Section 6" or "6."
+                next_header_pattern = rf'(?:Section\s+)?{next_sec["section_no"]}\.'
+                split_content = re.split(next_header_pattern, content, flags=re.IGNORECASE)
+                content = split_content[0]
+
+            # Final cleanup
+            clean_content = re.sub(r'\s+', ' ', content).strip()
+            
+            if len(clean_content) > 50:
+                sections.append({
+                    "id": f"hk-cap{self.cap_number}-s{entry['section_no']}",
+                    "content": clean_content,
+                    "title": f"Cap. {self.cap_number} - {entry['title']}",
+                    "citation": f"Cap. {self.cap_number}, s. {entry['section_no']}",
+                    "source_url": f"{self.url}#page={start_idx + 1}",
+                    "page": entry["page_label"],
                     "type": "Ordinance"
-                }
-                last_pos = match.start()
-            
-            # Add the rest of the page to the current section
-            if current_section:
-                current_section["content"] += page_text[last_pos:]
-                last_pos = 0 
-
-        # Add the last section
-        if current_section:
-            sections.append(current_section)
-            
-        # Post-process: filter out short/invalid sections and clean up titles
-        valid_sections = []
-        for s in sections:
-            # Clean up content (remove excessive whitespace)
-            s["content"] = re.sub(r'\s+', ' ', s["content"]).strip()
-            
-            if len(s["content"]) > 100 and "Contents" not in s["title"]:
-                valid_sections.append(s)
+                })
 
         doc.close()
-        return valid_sections
+        print(f"Parsed {len(sections)} sections using TOC-to-Page mapping.")
+        return sections
+        return sections
 
 if __name__ == "__main__":
     import asyncio
