@@ -102,6 +102,13 @@ class PDFLegalParser:
                 
                 if page_label:
                     section_title = " ".join(title_parts)
+                    
+                    # Filter out repealed or omitted sections
+                    title_lower = section_title.lower()
+                    if "(repealed)" in title_lower or "(omitted)" in title_lower or "repealed" == title_lower or "omitted" == title_lower:
+                        i += 1
+                        continue
+
                     physical_idx = label_to_idx.get(page_label)
                     
                     if physical_idx is not None:
@@ -152,8 +159,13 @@ class PDFLegalParser:
                 })
 
         doc.close()
+        
+        print("\n--- Parsed Sections ---")
+        for s in sections:
+            print(f"[{s['page']}] Section {s['id'].split('-s')[-1]}: {s['title']}")
+        print(f"-----------------------\n")
+        
         print(f"Parsed {len(sections)} sections using TOC-to-Page mapping.")
-        return sections
         return sections
 
 if __name__ == "__main__":
