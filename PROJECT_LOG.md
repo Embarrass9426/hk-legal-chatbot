@@ -98,6 +98,27 @@
 - **Backend**: Metadata in Pinecone now includes granular page-level information.
 - **Next Steps**: 
     - Implement a PDF viewer directly in the app (optional).
+
+---
+*Log updated on 2026-01-01*
+
+## 📅 January 2, 2026
+
+### ✅ Completed Tasks
+- **Multi-language Support**:
+    - Added a **Language Toggle** (EN/繁) to the frontend header.
+    - Implemented dynamic initial greeting translation based on selected language.
+    - **UI Localization**: Updated the header title, subtitle, input placeholder, and error messages to switch between English and Traditional Chinese based on the toggle.
+    - Updated backend `ChatRequest` schema to accept `language` parameter.
+    - Refined LLM system prompt to enforce response language (Traditional Chinese or English) while maintaining legal citation integrity.
+    - Ensured the RAG pipeline correctly handles language preferences during the generation phase.
+
+### 🛠️ Current Status
+- **Frontend**: Users can now toggle between English and Traditional Chinese.
+- **Backend**: Supports language-specific generation based on frontend preference.
+- **Next Steps**: 
+    - Implement caching for scraped/parsed content.
+    - Expand Case Law ingestion.
     - Expand the database to include more Ordinances related to labor law.
 
 ---

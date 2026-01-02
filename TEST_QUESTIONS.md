@@ -28,5 +28,15 @@ This document contains a set of test questions to evaluate the accuracy and perf
 - List the schedules that define the "Specified Amount of Compensation".
 - How do the notice requirements in Section 11 differ from the claim requirements in Section 14?
 
+## 5. 繁體中文測試問題 (Traditional Chinese Test Questions)
+- 根據《僱員補償條例》第40條，僱主的強制保險要求是什麼？
+- 如果僱員在八號風球期間上班途中受傷，僱主是否需要負責補償？
+- 根據第282章，可支付的殯殮費最高金額是多少？
+- 如果僱員的受傷是由於其「嚴重及故意的不當行為」引起的，法律上會如何處理？
+- 僱員在香港以外地方發生意外，是否仍受保障？
+- 什麼是「職業病」？它與「意外」的補償方式有何不同？（參考第32條）
+- 僱主若未有按時支付暫時喪失工作能力的「按期付款」，會有什麼法律後果？
+- 建築工人在為分判商工作時受傷，他可以直接向總承判商索取補償嗎？
+
 ---
 **Note:** When testing, verify if the chatbot provides the correct **Section** or **Schedule** citation as a reference.

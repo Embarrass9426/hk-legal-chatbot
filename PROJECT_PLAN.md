@@ -19,12 +19,12 @@ Build a Retrieval-Augmented Generation (RAG) system for Hong Kong legal material
 
 ## 🧩 Tech Stack
 
-- **LLM**: DeepSeek 3.2 (via API)
+- **LLM**: DeepSeek-V3.2 (via API)
 - **Vector Database**: Pinecone
-- **Embedding Model**: HuggingFaceEmbedding
+- **Embedding Model**: HuggingFace (`all-MiniLM-L6-v2`)
 - **Backend**: Python (FastAPI + LangChain)
-- **Frontend**: React
-- **Web Scraping**: PDF Downloading + PDF Parsing (PyMuPDF/pdfplumber)
+- **Frontend**: React (Vite + Tailwind CSS)
+- **Web Scraping**: Playwright (for SPAs) + PyMuPDF (for PDFs)
 - **Data Sources**: 
     - [e-Legislation](https://www.elegislation.gov.hk/) (Primary: PDF Statutes)
     - [HKLII](https://www.hklii.hk/) (Secondary: Case Law)
@@ -77,25 +77,33 @@ The system must strictly follow standard Hong Kong legal citation styles:
 - [x] Design and build the **React** interface.
 - [x] Create mock-up for answer display and reference cards.
 - [x] Implement clickable reference links (opening in new tabs).
-- [ ] Ensure responsive design for legal research on different devices.
+- [x] Ensure responsive design for legal research on different devices.
+- [x] Implement **Language Toggle** (English/Traditional Chinese).
 
 ### Phase 2: Backend & RAG Pipeline (Python/FastAPI)
 - [x] Set up **FastAPI** server.
 - [x] Implement **Keyword Extraction** logic to identify target laws/cases from queries.
 - [x] Implement **LangChain** retrieval logic with metadata filtering.
-- [x] Integrate **DeepSeek 3.2 API** for "Citation-First" generation.
-- [ ] Post-process LLM output to map citations to `source_url`.
+- [x] Integrate **DeepSeek-V3 API** for "Citation-First" generation.
+- [x] Post-process LLM output to map citations to `source_url` (via structured reference streaming).
+- [x] Support **Multi-language Generation** (Traditional Chinese/English).
 
 ### Phase 3: Data Ingestion & PDF Parsing (e-Legislation)
-- [ ] Download **Employees' Compensation Ordinance (Cap. 282)** PDF from e-Legislation.
-- [ ] Implement **PDF Parser** to extract text while preserving section/clause hierarchy.
-- [ ] Chunk documents by **Section/Clause** to ensure precise referencing.
-- [ ] Extract metadata (Cap No., Section, Clause, Page, URL).
+- [x] Download **Employees' Compensation Ordinance (Cap. 282)** PDF from e-Legislation.
+- [x] Implement **PDF Parser** with TOC-to-Page mapping logic.
+- [x] Chunk documents by **Section/Clause** to ensure precise referencing.
+- [x] Extract metadata (Cap No., Section, Clause, Page, URL).
 
 ### Phase 4: Vector Database & RAG Refinement
-- [ ] Generate embeddings for parsed PDF chunks.
-- [ ] Upsert to **Pinecone** with granular metadata.
-- [ ] Refine LLM prompt to prioritize **Employee Compensation** scenarios.
+- [x] Generate embeddings for parsed PDF chunks using HuggingFace.
+- [x] Upsert to **Pinecone** with granular metadata (Page labels, physical pages).
+- [x] Refine LLM prompt to prioritize **Employee Compensation** scenarios.
+
+### Phase 5: Advanced Features & Scaling
+- [ ] Implement caching for scraped/parsed content to reduce latency.
+- [ ] Expand data ingestion to include Case Law from HKLII.
+- [ ] Refine scraper selectors for more granular section extraction from SPAs.
+- [ ] Implement an in-app PDF viewer for seamless reference checking.
 
 ---
 

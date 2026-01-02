@@ -44,8 +44,9 @@ llm = ChatOpenAI(
 
 class ChatRequest(BaseModel):
     message: str
+    language: str = "en"
 
-async def generate_chat_responses(message: str):
+async def generate_chat_responses(message: str, language: str = "en"):
     try:
         # 1. Extract Keywords and Target Law
         analysis = await utils.extract_keywords(message, llm)
@@ -73,10 +74,14 @@ Instructions:
 3. Always cite the specific Section (e.g., [1] Cap. 282, s. 5) when referring to the law.
 4. Be empathetic but professional.
 5. If the user asks about a specific injury (like breaking a leg), explain if it's covered under "arising out of and in the course of employment".
-
-CONTEXT:
 """
-        system_content += context_text
+        
+        if language == "zh":
+            system_content += "\nIMPORTANT: You MUST respond in Traditional Chinese (繁體中文). Even if the context is in English, translate the relevant parts to help the user understand, but keep the legal citations (e.g. Cap. 282, s. 5) recognizable."
+        else:
+            system_content += "\nIMPORTANT: Respond in English."
+
+        system_content += "\n\nCONTEXT:\n" + context_text
 
         messages = [
             SystemMessage(content=system_content),
@@ -102,7 +107,7 @@ CONTEXT:
 @app.post("/chat")
 async def chat(request: ChatRequest):
     try:
-        return StreamingResponse(generate_chat_responses(request.message), media_type="text/event-stream")
+        return StreamingResponse(generate_chat_responses(request.message, request.language), media_type="text/event-stream")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -7,6 +7,7 @@ import ReferenceCard from './ReferenceCard';
 const ChatInterface = ({ darkMode, toggleDarkMode }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [language, setLanguage] = useState('en'); // 'en' or 'zh'
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -15,6 +16,21 @@ const ChatInterface = ({ darkMode, toggleDarkMode }) => {
       references: []
     }
   ]);
+
+  const toggleLanguage = () => {
+    const newLang = language === 'en' ? 'zh' : 'en';
+    setLanguage(newLang);
+    
+    // Update the initial message if it's the only one
+    if (messages.length === 1 && messages[0].role === 'assistant') {
+      setMessages([{
+        ...messages[0],
+        content: newLang === 'en' 
+          ? 'Hello! I am your Hong Kong Legal Assistant. How can I help you today?' 
+          : '你好！我是你的香港法律助手。今天有什麼可以幫到你？'
+      }]);
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -35,7 +51,7 @@ const ChatInterface = ({ darkMode, toggleDarkMode }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ message: input, language: language }),
       });
 
       if (!response.ok) {
@@ -118,7 +134,9 @@ const ChatInterface = ({ darkMode, toggleDarkMode }) => {
       const errorMessage = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: 'Sorry, I encountered an error connecting to the legal database. Please ensure the backend is running.',
+        content: language === 'en' 
+          ? 'Sorry, I encountered an error connecting to the legal database. Please ensure the backend is running.'
+          : '抱歉，連接法律數據庫時出錯。請確保後端正在運行。',
         references: []
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -136,18 +154,29 @@ const ChatInterface = ({ darkMode, toggleDarkMode }) => {
             <Gavel className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100">HK Legal RAG</h1>
+            <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+              {language === 'en' ? 'HK Legal Chatbot' : '香港法律聊天機器人'}
+            </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Info className="w-3 h-3" /> Verified Legal Sources Only
+              <Info className="w-3 h-3" /> {language === 'en' ? 'Verified Legal Sources Only' : '僅限經核實的法律來源'}
             </p>
           </div>
         </div>
-        <button 
-          onClick={toggleDarkMode}
-          className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-        >
-          {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={toggleLanguage}
+            className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-xs font-bold min-w-[40px]"
+            title={language === 'en' ? 'Switch to Traditional Chinese' : '切換至英文'}
+          >
+            {language === 'en' ? 'EN' : '繁'}
+          </button>
+          <button 
+            onClick={toggleDarkMode}
+            className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+          >
+            {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+        </div>
       </header>
 
       {/* Chat Area */}
@@ -218,7 +247,7 @@ const ChatInterface = ({ darkMode, toggleDarkMode }) => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Ask about HK Ordinances or Case Law..."
+            placeholder={language === 'en' ? "Ask about HK Ordinances or Case Law..." : "詢問有關香港條例或案例..."}
             disabled={isLoading}
             className="flex-1 bg-slate-100 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:opacity-50"
           />
