@@ -12,7 +12,7 @@ async def ingest_cap282():
         print("Failed to download PDF. Aborting.")
         return
         
-    sections = parser.parse_sections()
+    sections = await parser.parse_sections()
     print(f"Successfully parsed {len(sections)} sections.")
     
     # 2. Initialize Vector Store

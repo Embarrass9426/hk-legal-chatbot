@@ -102,3 +102,29 @@
 
 ---
 *Log updated on 2026-01-01*
+
+## 📅 January 2, 2026
+
+### ✅ Completed Tasks
+- **LLM-Powered PDF Parsing**:
+    - Integrated **DeepSeek LLM** into the PDF parsing pipeline to solve regex-based extraction failures.
+    - Implemented a **Two-Step LLM Process** for Table of Contents (TOC) extraction:
+        1. **Identification**: LLM scans raw TOC text to generate a clean, plain-text list of all sections and schedules.
+        2. **Structuring**: LLM matches the identified list to titles and page labels, outputting a structured JSON.
+    - Added **Verification & Recovery Logic**: The script now compares the LLM's JSON output against the initial identification list and triggers a targeted retry for any missing sections.
+    - Improved **Content Extraction**:
+        - Fixed "0-length content" issues by ensuring at least one page is read when multiple sections share a page.
+        - Implemented **Header-Based Splitting**: Uses regex to find the exact start and end of a section on a shared page, discarding text from adjacent sections.
+        - Increased TOC scan range to 15 pages to support larger ordinances.
+- **Testing Infrastructure**:
+    - Created `TEST_QUESTIONS.md` containing factual, scenario-based, and edge-case questions specifically for Cap. 282 to evaluate RAG performance.
+- **Environment & Dependencies**:
+    - Configured and verified the Python virtual environment (`.venv`) for consistent execution.
+    - Installed and configured **Playwright Chromium** for automated PDF downloads.
+
+### 🛠️ Current Status
+- **Backend**: PDF parsing is now highly accurate, successfully capturing 109+ sections of Cap. 282 with precise content boundaries.
+- **Next Steps**: 
+    - Evaluate chatbot performance using the new test questions.
+    - Implement multi-ordinance support in the ingestion pipeline.
+
