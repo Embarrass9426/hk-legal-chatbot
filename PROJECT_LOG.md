@@ -74,3 +74,31 @@
 
 ---
 *Log updated on 2025-12-31*
+
+## 📅 January 1, 2026
+
+### ✅ Completed Tasks
+- **Enhanced PDF Parsing**:
+    - Implemented a robust **TOC-to-Page mapping** logic in `backend/pdf_parser.py`.
+    - Hardcoded TOC extraction from pages 1-9 to build a reliable section index.
+    - Developed a manual page label scanner to map printed labels (e.g., "3A-10") to physical PDF indices, overcoming empty metadata in source PDFs.
+    - Improved title extraction to handle multi-line headers and filter out irrelevant text.
+    - Added logic to filter out "repealed" or "omitted" sections from the database.
+    - Added detailed console logging to display the list of parsed sections during ingestion.
+    - Implemented automatic content chunking in `backend/vector_store.py` using `RecursiveCharacterTextSplitter` to stay within Pinecone's 40KB metadata limit.
+- **Vector Store Refresh**:
+    - Re-ingested Cap. 282 (Employees' Compensation Ordinance) with 73 high-quality sections, each mapped to its exact printed page label and physical page.
+- **Frontend Reference Improvements**:
+    - Updated `ReferenceCard.jsx` to be fully clickable.
+    - Added "Page X" indicators to reference cards for better transparency.
+    - Improved hover states and visual feedback for legal citations.
+
+### 🛠️ Current Status
+- **Frontend**: Reference cards now link directly to the exact page of the Ordinance PDF.
+- **Backend**: Metadata in Pinecone now includes granular page-level information.
+- **Next Steps**: 
+    - Implement a PDF viewer directly in the app (optional).
+    - Expand the database to include more Ordinances related to labor law.
+
+---
+*Log updated on 2026-01-01*

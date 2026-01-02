@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, Gavel, Info, Sun, Moon } from 'lucide-react';
+import { Send, Gavel, Info, Sun, Moon, User, Bot } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ReferenceCard from './ReferenceCard';
@@ -160,7 +160,14 @@ const ChatInterface = ({ darkMode, toggleDarkMode }) => {
             }
             
             return (
-              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div key={msg.id} className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1 ${
+                  msg.role === 'user' 
+                    ? 'bg-blue-100 text-blue-600' 
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                }`}>
+                  {msg.role === 'user' ? <User className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
+                </div>
                 <div className={`max-w-[80%] ${
                   msg.role === 'user' 
                     ? 'bg-blue-600 text-white rounded-l-2xl rounded-tr-2xl' 
@@ -187,7 +194,10 @@ const ChatInterface = ({ darkMode, toggleDarkMode }) => {
             );
           })}
           {isLoading && (messages[messages.length - 1]?.role !== 'assistant' || !messages[messages.length - 1]?.content) && (
-            <div className="flex justify-start">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                <Bot className="w-5 h-5" />
+              </div>
               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-r-2xl rounded-tl-2xl p-4 shadow-sm">
                 <div className="flex gap-1">
                   <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
