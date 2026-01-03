@@ -105,28 +105,6 @@
 ## 📅 January 2, 2026
 
 ### ✅ Completed Tasks
-- **Multi-language Support**:
-    - Added a **Language Toggle** (EN/繁) to the frontend header.
-    - Implemented dynamic initial greeting translation based on selected language.
-    - **UI Localization**: Updated the header title, subtitle, input placeholder, and error messages to switch between English and Traditional Chinese based on the toggle.
-    - Updated backend `ChatRequest` schema to accept `language` parameter.
-    - Refined LLM system prompt to enforce response language (Traditional Chinese or English) while maintaining legal citation integrity.
-    - Ensured the RAG pipeline correctly handles language preferences during the generation phase.
-
-### 🛠️ Current Status
-- **Frontend**: Users can now toggle between English and Traditional Chinese.
-- **Backend**: Supports language-specific generation based on frontend preference.
-- **Next Steps**: 
-    - Implement caching for scraped/parsed content.
-    - Expand Case Law ingestion.
-    - Expand the database to include more Ordinances related to labor law.
-
----
-*Log updated on 2026-01-01*
-
-## 📅 January 2, 2026
-
-### ✅ Completed Tasks
 - **LLM-Powered PDF Parsing**:
     - Integrated **DeepSeek LLM** into the PDF parsing pipeline to solve regex-based extraction failures.
     - Implemented a **Two-Step LLM Process** for Table of Contents (TOC) extraction:
@@ -137,6 +115,13 @@
         - Fixed "0-length content" issues by ensuring at least one page is read when multiple sections share a page.
         - Implemented **Header-Based Splitting**: Uses regex to find the exact start and end of a section on a shared page, discarding text from adjacent sections.
         - Increased TOC scan range to 15 pages to support larger ordinances.
+- **Multi-language Support**:
+    - Added a **Language Toggle** (EN/繁) to the frontend header.
+    - Implemented dynamic initial greeting translation based on selected language.
+    - **UI Localization**: Updated the header title, subtitle, input placeholder, and error messages to switch between English and Traditional Chinese based on the toggle.
+    - Updated backend `ChatRequest` schema to accept `language` parameter.
+    - Refined LLM system prompt to enforce response language (Traditional Chinese or English) while maintaining legal citation integrity.
+    - Ensured the RAG pipeline correctly handles language preferences during the generation phase.
 - **Testing Infrastructure**:
     - Created `TEST_QUESTIONS.md` containing factual, scenario-based, and edge-case questions specifically for Cap. 282 to evaluate RAG performance.
 - **Environment & Dependencies**:
@@ -145,7 +130,43 @@
 
 ### 🛠️ Current Status
 - **Backend**: PDF parsing is now highly accurate, successfully capturing 109+ sections of Cap. 282 with precise content boundaries.
+- **Frontend**: Users can now toggle between English and Traditional Chinese.
 - **Next Steps**: 
     - Evaluate chatbot performance using the new test questions.
     - Implement multi-ordinance support in the ingestion pipeline.
+
+---
+*Log updated on 2026-01-02*
+
+## 📅 January 4, 2026
+
+### ✅ Completed Tasks
+- **Strategic Pivot to "All Caps"**:
+    - Expanded the project scope from a single Ordinance (Cap. 282) to all **3,000+ Hong Kong Ordinances** available on e-Legislation.
+    - Updated `PROJECT_PLAN.md` to reflect the new "all Caps" strategy and the shift towards an OCR-ready, hybrid parsing approach.
+- **Cap Discovery & Indexing**:
+    - Developed `backend/scripts/cap_discovery.py` using **Playwright** to scrape the e-Legislation Chapter Number Index.
+    - Successfully identified and indexed **3,086 unique Cap numbers** (including alphanumeric ones like 1A, 207A).
+    - Generated `backend/data/cap_list.json` as the master list for batch processing.
+- **Intelligent PDF Parser (v2)**:
+    - Re-engineered `backend/pdf_parser.py` into a robust `PDFLegalParser` class.
+    - **TOC Detection**: Integrated DeepSeek LLM to analyze the first 40 pages of any PDF to determine if a Table of Contents exists.
+    - **Hybrid Extraction Pipeline**:
+        - **Branch A (TOC)**: Uses a 2-step LLM process (Identification -> Structuring) to map sections to page labels, followed by regex-refined content extraction.
+        - **Branch B (Fallback)**: Implemented a full-text extraction fallback for shorter documents or those without a TOC.
+    - **Granular Storage**: Configured the parser to save results as individual `cap{num}.json` files in `backend/data/parsed/` to support incremental vector database updates.
+- **Documentation & Architecture**:
+    - Created `docs/PDF_PARSER_LOGIC.md` to provide a detailed technical specification and pseudocode for the parsing pipeline.
+    - Implemented a custom sorting algorithm for alphanumeric Cap numbers to ensure logical processing order.
+
+### 🛠️ Current Status
+- **Data**: We now have a complete list of all HK Ordinances to be ingested.
+- **Parser**: The intelligent parsing pipeline is ready for batch execution.
+- **Next Steps**: 
+    - Implement a **Batch Downloader** with retry logic for the 3,000+ PDFs.
+    - Develop a **Batch Ingestor** to upsert the parsed JSON files into Pinecone.
+    - Refine OCR fallback for scanned/image-based PDFs.
+
+---
+*Log updated on 2026-01-04*
 

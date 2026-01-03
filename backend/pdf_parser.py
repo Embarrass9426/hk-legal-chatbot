@@ -14,10 +14,82 @@ class PDFLegalParser:
         self.cap_number = cap_number
         self.pdf_path = f"cap{cap_number}.pdf"
         self.url = f"https://www.elegislation.gov.hk/hk/cap{cap_number}!en.pdf"
+        self.output_dir = "backend/data/parsed"
+        os.makedirs(self.output_dir, exist_ok=True)
         self.client = AsyncOpenAI(
             api_key=os.getenv("DEEPSEEK_API_KEY"),
             base_url="https://api.deepseek.com"
         )
+
+    def sort_cap_numbers(self, cap_list):
+        """Sorts cap numbers like ['1', '207', '207A', '2'] into ['1', '2', '207', '207A']."""
+        def key_func(cap):
+            match = re.match(r"(\d+)([A-Z]*)", cap)
+            if match:
+                return (int(match.group(1)), match.group(2))
+            return (0, cap)
+        return sorted(cap_list, key=key_func)
+
+    async def run_pipeline(self):
+        """Main entry point for processing a single Ordinance."""
+        print(f"\n=== Starting Pipeline for Cap {self.cap_number} ===")
+        if not await self.download_pdf():
+            print(f"Failed to download PDF for Cap {self.cap_number}")
+            return []
+
+        has_toc = await self.check_has_toc()
+        
+        if has_toc:
+            print(f"TOC detected for Cap {self.cap_number}. Proceeding with structured parsing.")
+            # Extract TOC text (first 40 pages as per plan)
+            doc = fitz.open(self.pdf_path)
+            toc_text = ""
+            for i in range(min(40, len(doc))):
+                toc_text += doc[i].get_text()
+            doc.close()
+
+            identified_list = await self._identify_sections_llm(toc_text)
+            if not identified_list:
+                print("No sections identified. Falling back to full text.")
+                sections = await self.extract_full_text_fallback()
+            else:
+                structured_toc = await self._structure_toc_json_llm(identified_list, toc_text)
+                sections = await self.extract_content_by_toc(structured_toc)
+        else:
+            print(f"No TOC detected for Cap {self.cap_number}. Using fallback extraction.")
+            sections = await self.extract_full_text_fallback()
+
+        if sections:
+            self.save_to_json(sections)
+        
+        print(f"=== Completed Pipeline for Cap {self.cap_number} ===\n")
+        return sections
+
+    async def check_has_toc(self):
+        """Uses LLM to determine if the PDF has a Table of Contents in the first 40 pages."""
+        if not os.path.exists(self.pdf_path):
+            return False
+        
+        doc = fitz.open(self.pdf_path)
+        toc_text = ""
+        for i in range(min(40, len(doc))):
+            toc_text += doc[i].get_text()
+        doc.close()
+
+        if not toc_text.strip():
+            return False
+
+        prompt = f"Analyze this text from a Hong Kong Ordinance. Does it contain a 'Table of Contents' or 'Contents' section listing sections/schedules and page numbers? Respond with ONLY 'YES' or 'NO'.\n\nText snippet:\n{toc_text[:4000]}"
+        
+        try:
+            response = await self.client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return "YES" in response.choices[0].message.content.upper()
+        except Exception as e:
+            print(f"TOC Detection failed: {e}")
+            return False
 
     async def download_pdf(self):
         """Downloads the PDF from e-Legislation using Playwright to handle dynamic loading."""
@@ -214,12 +286,39 @@ class PDFLegalParser:
         print("Step 2: Extracting details and structuring (JSON)...")
         return await self._structure_toc_json_llm(identified_list, toc_text)
 
-    async def parse_sections(self):
+    async def extract_full_text_fallback(self):
+        """Fallback for PDFs without a TOC: Extract full text as a single chunk."""
+        if not os.path.exists(self.pdf_path):
+            return []
+            
+        doc = fitz.open(self.pdf_path)
+        full_text = ""
+        for page in doc:
+            full_text += page.get_text()
+        doc.close()
+        
+        clean_content = re.sub(r'\s+', ' ', full_text).strip()
+        
+        return [{
+            "id": f"hk-cap{self.cap_number}-full",
+            "content": clean_content,
+            "title": f"Cap. {self.cap_number} (Full Text)",
+            "citation": f"Cap. {self.cap_number}",
+            "source_url": self.url,
+            "page": "1",
+            "type": "Ordinance"
+        }]
+
+    def save_to_json(self, sections):
+        """Saves the parsed sections to a JSON file."""
+        output_path = os.path.join(self.output_dir, f"cap{self.cap_number}.json")
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(sections, f, ensure_ascii=False, indent=2)
+        print(f"Saved {len(sections)} sections to {output_path}")
+
+    async def extract_content_by_toc(self, toc_entries):
         """
-        Parses the PDF by:
-        1. Scanning all pages to build a map of printed page labels (e.g., "3A-10") to physical indices.
-        2. Extracting TOC text and using DeepSeek LLM to get structured entries.
-        3. Extracting content between the identified physical pages.
+        Extracts content between the identified physical pages based on the structured TOC.
         """
         if not os.path.exists(self.pdf_path):
             return []
@@ -237,20 +336,7 @@ class PDFLegalParser:
                         label_to_idx[line] = idx
                     break
 
-        # 2. Extract TOC text (usually first 15 pages for large ordinances)
-        toc_text = ""
-        for i in range(min(15, len(doc))):
-            toc_text += doc[i].get_text()
-        
-        print("Extracting structured TOC using DeepSeek...")
-        toc_entries = await self._get_structured_toc_llm(toc_text)
-        
-        if not toc_entries:
-            print("Failed to extract TOC entries using LLM.")
-            doc.close()
-            return []
-
-        # 3. Extract content
+        # 2. Extract content
         sections = []
         # Add physical_idx to entries
         valid_entries = []
@@ -315,24 +401,15 @@ class PDFLegalParser:
                 print(f"DEBUG: Dropped Section {entry['section_no']} - Content too short ({len(clean_content)} chars).")
 
         doc.close()
-        
-        print(f"\n--- Parsed {len(sections)} Sections ---")
-        # print sample sections
-        for sec in sections:
-            print(f"Citation: {sec['citation']}")
-            print(f"Title: {sec['title']}")
-            print(f"Content Preview: {sec['content'][:100]}...")
-        print("-------------------------------\n")
         return sections
 
 if __name__ == "__main__":
     async def test():
-        parser = PDFLegalParser("282")
-        if await parser.download_pdf():
-            sections = await parser.parse_sections()
-            print(f"Parsed {len(sections)} sections.")
-            if sections:
-                print("Sample Section:", sections[0]['citation'])
-                print("Content Preview:", sections[0]['content'][:200])
+        parser = PDFLegalParser()
+        sections = await parser.run_pipeline()
+        if sections:
+            print(f"Successfully parsed {len(sections)} sections.")
+            print("Sample Section:", sections[0]['citation'])
+            print("Content Preview:", sections[0]['content'][:200])
     
     asyncio.run(test())

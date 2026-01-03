@@ -1,7 +1,7 @@
 # 🧱 Hong Kong Legal RAG System — Architecture & Implementation Plan
 
 ## 🎯 Objective
-Build a Retrieval-Augmented Generation (RAG) system for Hong Kong legal materials, featuring clickable references, proper legal citations, and traceable source metadata.
+Build a Retrieval-Augmented Generation (RAG) system for all Hong Kong Ordinances (Caps) from e-Legislation, featuring clickable references, proper legal citations, and traceable source metadata.
 
 ---
 
@@ -89,18 +89,26 @@ The system must strictly follow standard Hong Kong legal citation styles:
 - [x] Support **Multi-language Generation** (Traditional Chinese/English).
 
 ### Phase 3: Data Ingestion & PDF Parsing (e-Legislation)
-- [x] Download **Employees' Compensation Ordinance (Cap. 282)** PDF from e-Legislation.
-- [x] Implement **PDF Parser** with TOC-to-Page mapping logic.
-- [x] Chunk documents by **Section/Clause** to ensure precise referencing.
-- [x] Extract metadata (Cap No., Section, Clause, Page, URL).
+- [x] Download **Employees' Compensation Ordinance (Cap. 282)** PDF (Initial Test Case).
+- [ ] **Cap Discovery**: Scrape e-Legislation index to generate a sorted list of all valid Cap numbers (e.g., 1, 207, 207A).
+- [ ] **Batch Downloader**: Implement a robust downloader with retry logic to fetch all identified PDFs.
+- [ ] **Intelligent PDF Parser**:
+    - [ ] **TOC Detection**: Use DeepSeek to analyze the first 40 pages to identify if a Table of Contents exists.
+    - [ ] **Hybrid Extraction**:
+        - **Branch A (TOC exists)**: Use the 2-step LLM process (List -> JSON) to map sections to page labels, then extract content between labels.
+        - **Branch B (No TOC)**: Extract full text or use regex header detection for shorter documents.
+    - [ ] **Metadata Enrichment**: Ensure every chunk has Cap No., Section, Title, and a direct URL with page anchors.
+- [ ] **Storage**: Save each parsed Ordinance as an individual `cap{num}.json` file in `backend/data/parsed/`.
 
 ### Phase 4: Vector Database & RAG Refinement
+- [ ] **Batch Ingestor**: Script to iterate through `backend/data/parsed/*.json` and upsert to Pinecone.
 - [x] Generate embeddings for parsed PDF chunks using HuggingFace.
 - [x] Upsert to **Pinecone** with granular metadata (Page labels, physical pages).
 - [x] Refine LLM prompt to prioritize **Employee Compensation** scenarios.
 
 ### Phase 5: Advanced Features & Scaling
 - [ ] Implement caching for scraped/parsed content to reduce latency.
+- [ ] Refine **OCR accuracy** for bilingual legal terminology and complex tables.
 - [ ] Expand data ingestion to include Case Law from HKLII.
 - [ ] Refine scraper selectors for more granular section extraction from SPAs.
 - [ ] Implement an in-app PDF viewer for seamless reference checking.
