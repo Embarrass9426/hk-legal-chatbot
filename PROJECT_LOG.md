@@ -160,13 +160,72 @@
     - Implemented a custom sorting algorithm for alphanumeric Cap numbers to ensure logical processing order.
 
 ### 🛠️ Current Status
-- **Data**: We now have a complete list of all HK Ordinances to be ingested.
-- **Parser**: The intelligent parsing pipeline is ready for batch execution.
+- **Data**: We now have a complete list of all 3,145 HK Ordinances to be ingested.
+- **Parser**: The intelligent parsing pipeline is ready, but implementation is paused for RAG optimization research.
 - **Next Steps**: 
-    - Implement a **Batch Downloader** with retry logic for the 3,000+ PDFs.
-    - Develop a **Batch Ingestor** to upsert the parsed JSON files into Pinecone.
-    - Refine OCR fallback for scanned/image-based PDFs.
+    - Research fixed-length chunking with metadata-linked retrieval.
+    - Evaluate embedding models for legal text.
+    - Implement HyDE and Synthetic QA generation for better retrieval.
+    - Develop a memory management system for multi-turn conversations.
 
 ---
 *Log updated on 2026-01-04*
 
+## 📅 January 4, 2026 (Evening Update)
+
+### 🔍 Major Issues Identified
+- **Chunking Inefficiency**: TOC-based parsing creates variable-length sections. Since embedding vectors have fixed lengths, a single section might be split across multiple vectors, leading to fragmented retrieval and poor search results.
+- **Embedding Model Suitability**: Current model (`all-MiniLM-L6-v2`) may not be optimal for the nuances of legal terminology and formal sentence structures.
+- **Semantic Gap**: User queries often use natural language that differs significantly from the formal, structured language of legal documents, causing low similarity scores in vector search.
+- **Lack of Conversation Memory**: The current system is stateless and cannot handle multi-turn dialogues or remember context from previous questions.
+
+### 🚀 Strategic Pivot & Research Decisions
+- **Fixed-Length Chunking**: Decided to move towards fixed-length chunks with metadata (section labels, order index). This allows for consistent embedding while enabling the retrieval of the full section by indexing back to related chunks.
+- **Query Alignment Research**:
+    - **Synthetic QA**: Plan to generate question-answer pairs for each chunk to search against user queries.
+    - **HyDE (Hypothetical Document Embeddings)**: Plan to use LLM-generated "fake answers" to bridge the semantic gap between queries and legal text.
+- **Memory Management**: Researching sliding window and summarization techniques to maintain conversation context within token limits.
+- **Implementation Pause**: Paused the batch downloader and ingestor to ensure the RAG architecture is optimized before processing 3,000+ documents.
+
+
+##  January 7, 2026
+
+###  Completed Tasks
+- **Model Research**: Identified `Yuan-embedding-2.0-en` for embeddings and `Qwen3-Reranker-8B` for reranking.
+- **RAG Pipeline Redesign**:
+    - Defined a new chunking strategy: Section splitting -> 300 token chunks -> 10% overlap.
+    - Updated metadata schema to include `doc_id`, `section_id`, `section_title`, `chunk_index`, and `total_chunks_in_section`.
+    - Implemented **Asymmetric Prompting** strategy for both queries and documents.
+    - Added **Query Rewriting** step to improve retrieval accuracy.
+    - Optimized retrieval flow: Top 10 retrieval -> Duplicate removal -> Top 5 reranking -> Full section expansion.
+    - **Plan Alignment**: Updated Phase 4 of [PROJECT_PLAN.md](PROJECT_PLAN.md) to align with the specific choice of Yuan-embedding and Qwen3-Reranker, replacing general research goals with concrete implementation steps (Section reconstruction, asymmetric prompting, etc.).
+
+###  Current Status
+- **Documentation**: Updated [PROJECT_PLAN.md](PROJECT_PLAN.md) and [PROJECT_LOG.md](PROJECT_LOG.md) with the new architecture.
+- **Design**: Created [docs/RAG_DESIGN.md](docs/RAG_DESIGN.md) with detailed function pseudocode.
+
+###  Next Steps
+- Implement the new RAG pipeline in [backend/vector_store.py](backend/vector_store.py) and [backend/main.py](backend/main.py).
+- Update [backend/pdf_parser.py](backend/pdf_parser.py) to support the new section-based chunking logic.
+
+- **Retrieval Metrics**: Added a new evaluation stage to the project plan and RAG design. We will use **Recall@K** and **MRR** to benchmark our retrieval performance against a golden dataset.
+
+---
+*Log updated on 2026-01-07*
+
+## 📅 January 8, 2026
+
+### ✅ Completed Tasks
+- **Batch PDF Downloader**:
+    - Implemented `backend/scripts/batch_download.py` to automatically download all available English PDFs of HK ordinances from e-Legislation.
+    - Handles pagination, skips repealed/cancelled ordinances, and reports any failed downloads at the end.
+    - Supports configurable concurrency for efficient and polite scraping.
+
+### 🛠️ Current Status
+- **Data Ingestion**: 3,145 HK Ordinances PDF download tasks queued.
+- **Next Steps**: 
+    - Monitor and verify the completion of the PDF downloading process.
+    - Proceed with the ingestion of downloaded PDFs using the intelligent parsing pipeline.
+
+---
+*Log updated on 2026-01-08*

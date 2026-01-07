@@ -21,7 +21,8 @@ Build a Retrieval-Augmented Generation (RAG) system for all Hong Kong Ordinances
 
 - **LLM**: DeepSeek-V3.2 (via API)
 - **Vector Database**: Pinecone
-- **Embedding Model**: HuggingFace (`all-MiniLM-L6-v2`)
+- **Embedding Model**: `Yuan-embedding-2.0-en` (Hugging Face)
+- **Reranking Model**: `Qwen3-Reranker-8B` (Hugging Face)
 - **Backend**: Python (FastAPI + LangChain)
 - **Frontend**: React (Vite + Tailwind CSS)
 - **Web Scraping**: Playwright (for SPAs) + PyMuPDF (for PDFs)
@@ -83,6 +84,11 @@ The system must strictly follow standard Hong Kong legal citation styles:
 ### Phase 2: Backend & RAG Pipeline (Python/FastAPI)
 - [x] Set up **FastAPI** server.
 - [x] Implement **Keyword Extraction** logic to identify target laws/cases from queries.
+- [ ] Implement **Smarter Retrieval Pipeline**:
+    - [ ] **Query Rewriting**: Use LLM to rewrite user query for better legal retrieval context.
+    - [ ] **Asymmetric Prompting**: Prefix queries and documents with instructional prompts for better mapping.
+    - [ ] **Reranking**: Integrate `Qwen3-Reranker-8B` to refine top 10 results down to top 5.
+    - [ ] **Full Section Context**: For top reranked chunks, fetch all chunks from the same section to provide full legal context to the LLM.
 - [x] Implement **LangChain** retrieval logic with metadata filtering.
 - [x] Integrate **DeepSeek-V3 API** for "Citation-First" generation.
 - [x] Post-process LLM output to map citations to `source_url` (via structured reference streaming).
@@ -93,24 +99,42 @@ The system must strictly follow standard Hong Kong legal citation styles:
 - [ ] **Cap Discovery**: Scrape e-Legislation index to generate a sorted list of all valid Cap numbers (e.g., 1, 207, 207A).
 - [ ] **Batch Downloader**: Implement a robust downloader with retry logic to fetch all identified PDFs.
 - [ ] **Intelligent PDF Parser**:
-    - [ ] **TOC Detection**: Use DeepSeek to analyze the first 40 pages to identify if a Table of Contents exists.
-    - [ ] **Hybrid Extraction**:
+    - [x] **TOC Detection**: Use DeepSeek to analyze the first 40 pages to identify if a Table of Contents exists.
+    - [x] **Hybrid Extraction**:
         - **Branch A (TOC exists)**: Use the 2-step LLM process (List -> JSON) to map sections to page labels, then extract content between labels.
         - **Branch B (No TOC)**: Extract full text or use regex header detection for shorter documents.
-    - [ ] **Metadata Enrichment**: Ensure every chunk has Cap No., Section, Title, and a direct URL with page anchors.
+    - [ ] **Section-Based Chunking**:
+        - Split document by sections first (via `pdf_parser.py`).
+        - Chunk sections into 300 tokens with 10% overlap.
+    - [ ] **Metadata Enrichment**:
+        - Store with schema: `doc_id`, `section_id`, `section_title`, `chunk_index`, `total_chunks_in_section`.
+        - Ensure every chunk has a direct URL with page anchors.
 - [ ] **Storage**: Save each parsed Ordinance as an individual `cap{num}.json` file in `backend/data/parsed/`.
 
-### Phase 4: Vector Database & RAG Refinement
-- [ ] **Batch Ingestor**: Script to iterate through `backend/data/parsed/*.json` and upsert to Pinecone.
-- [x] Generate embeddings for parsed PDF chunks using HuggingFace.
-- [x] Upsert to **Pinecone** with granular metadata (Page labels, physical pages).
-- [x] Refine LLM prompt to prioritize **Employee Compensation** scenarios.
+### Phase 4: RAG Implementation & Refinement (Current Focus)
+- [x] **Model Selection**: Selected `Yuan-embedding-2.0-en` and `Qwen3-Reranker-8B` for high-precision legal retrieval.
+- [ ] **Asymmetric Retrieval Pipeline**:
+    - [ ] Implement **Query Rewriting** to focus on legal concepts using LLM.
+    - [ ] Apply **Asymmetric Prompting**: Prefix queries with `"Represent this question for retrieving relevant legal documents:"` and chunks with `"Represent this legal document passage for retrieval:"`.
+- [ ] **Section-Aware Chunking**:
+    - [ ] Split sections into 300-token chunks with 10% overlap.
+    - [ ] Tag chunks with `doc_id`, `section_id`, and `chunk_index` for full-section reconstruction.
+- [ ] **Context Expansion logic**:
+    - [ ] Retrieve Top 10 $\rightarrow$ Deduplicate $\rightarrow$ Rerank Top 5.
+    - [ ] For each Top 5 chunk, fetch **all sibling chunks** from the same `section_id` to provide complete legal context to DeepSeek.
+- [ ] **Retrieval Evaluation**:
+    - [ ] Develop evaluation script using **Recall@K** and **MRR** (Mean Reciprocal Rank) metrics.
+    - [ ] Create a golden dataset of query-section pairs for benchmarking.
+- [ ] **Multi-turn Conversation & Memory**:
+    - [ ] Implement a **Conversation Buffer** with context window management (sliding window or summarization).
 
-### Phase 5: Advanced Features & Scaling
+### Phase 5: Production Scaling
+- [ ] **Batch Downloader**: Implement a robust downloader with retry logic to fetch all 3,145 identified PDFs.
+- [ ] **Batch Ingestor**: Script to iterate through `backend/data/parsed/*.json` and upsert to Pinecone.
+- [ ] **Vector Database Migration**: Scale Pinecone index to handle the full corpus of HK Ordinances.
+- [ ] **OCR Integration**: Add OCR fallback for scanned/non-searchable PDFs.
 - [ ] Implement caching for scraped/parsed content to reduce latency.
-- [ ] Refine **OCR accuracy** for bilingual legal terminology and complex tables.
 - [ ] Expand data ingestion to include Case Law from HKLII.
-- [ ] Refine scraper selectors for more granular section extraction from SPAs.
 - [ ] Implement an in-app PDF viewer for seamless reference checking.
 
 ---
@@ -119,3 +143,4 @@ The system must strictly follow standard Hong Kong legal citation styles:
 - **Consistency**: Always check `PROJECT_PLAN.md` before adding new data sources.
 - **Metadata First**: Never ingest a chunk without a valid `source_url`.
 - **Citation Check**: Verify LLM citations against the retrieved metadata before displaying.
+- **Context Expansion**: Always provide the full legal section to the LLM if the section ID is identified.

@@ -6,3 +6,5 @@ __pycache__/
 .env.local
 .vscode/
 dist/
+# Ignore all downloaded PDFs
+backend/data/pdfs/

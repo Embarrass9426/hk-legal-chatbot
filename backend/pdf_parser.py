@@ -10,10 +10,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class PDFLegalParser:
-    def __init__(self, cap_number: str):
+    def __init__(self, cap_number: str, pdf_dir: str = "."):
         self.cap_number = cap_number
-        self.pdf_path = f"cap{cap_number}.pdf"
-        self.url = f"https://www.elegislation.gov.hk/hk/cap{cap_number}!en.pdf"
+        self.pdf_path = os.path.join(pdf_dir, f"cap{cap_number}.pdf")
+        self.url = f"https://www.elegislation.gov.hk/hk/cap{cap_number}!en.pdf?FROMCAPINDEX=Y"
         self.output_dir = "backend/data/parsed"
         os.makedirs(self.output_dir, exist_ok=True)
         self.client = AsyncOpenAI(
@@ -91,32 +91,27 @@ class PDFLegalParser:
             print(f"TOC Detection failed: {e}")
             return False
 
-    async def download_pdf(self):
+    async def download_pdf(self, context=None):
         """Downloads the PDF from e-Legislation using Playwright to handle dynamic loading."""
         if os.path.exists(self.pdf_path):
             print(f"PDF for Cap {self.cap_number} already exists.")
             return True
         
         print(f"Downloading Cap {self.cap_number} using Playwright...")
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(accept_downloads=True)
-            page = await context.new_page()
-            
+        
+        async def _download_with_context(ctx):
+            page = await ctx.new_page()
             try:
-                # Navigate to the main page first to establish session/cookies
-                print("Opening e-Legislation...")
-                await page.goto(f"https://www.elegislation.gov.hk/", wait_until="load", timeout=60000)
-                await asyncio.sleep(3)
+                # If it's a new context, we might need to visit the home page once
+                # but for simplicity let's just try direct download.
+                # Actually, e-Legislation often needs a session.
                 
-                # Trigger download
-                print(f"Requesting PDF for Cap {self.cap_number}...")
                 async with page.expect_download(timeout=60000) as download_info:
                     try:
                         await page.goto(self.url, wait_until="commit")
                     except Exception as e:
                         if "Download is starting" in str(e):
-                            print("Download started as expected.")
+                            pass
                         else:
                             raise e
                 
@@ -125,10 +120,26 @@ class PDFLegalParser:
                 print(f"Download complete: {self.pdf_path}")
                 return True
             except Exception as e:
-                print(f"Failed to download PDF with Playwright: {e}")
+                print(f"Failed to download PDF for Cap {self.cap_number}: {e}")
                 return False
             finally:
+                await page.close()
+
+        if context:
+            return await _download_with_context(context)
+        else:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                context = await browser.new_context(accept_downloads=True)
+                # Navigate to the main page first to establish session/cookies
+                page = await context.new_page()
+                await page.goto(f"https://www.elegislation.gov.hk/", wait_until="load", timeout=60000)
+                await asyncio.sleep(2)
+                await page.close()
+                
+                result = await _download_with_context(context)
                 await browser.close()
+                return result
 
     async def _identify_sections_llm(self, toc_text: str):
         """Step 1: Identify all sections and schedules from the TOC text as a plain list."""

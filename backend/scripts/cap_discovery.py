@@ -46,8 +46,9 @@ async def discover_caps():
                     const cells = row.querySelectorAll('td');
                     if (cells.length > 0) {
                         const text = cells[0].innerText.trim();
-                        // Match patterns like "1", "1A", "207", "207A"
-                        if (/^[0-9]+[A-Z]*$/.test(text)) {
+                        // Match patterns like "1", "1A", "A1", "207", "207A"
+                        // Allows optional letters at start, then digits, then optional letters at end
+                        if (/^[A-Z]*[0-9]+[A-Z]*$/.test(text)) {
                             caps.push(text);
                         }
                     }
@@ -58,10 +59,21 @@ async def discover_caps():
             if not cap_numbers:
                 print("No Cap numbers found in table, trying regex fallback on content...")
                 content = await page.content()
-                cap_numbers = re.findall(r'Cap\.\s*([0-9]+[A-Z]*)', content)
+                # More flexible regex for fallback
+                cap_numbers = re.findall(r'(?:Cap\.|Chapter:)\s*([A-Z]*[0-9]+[A-Z]*)', content)
 
-            # Remove duplicates and sort
-            unique_caps = sorted(list(set(cap_numbers)), key=lambda x: (int(re.match(r'(\d+)', x).group(1)), x))
+            # Remove duplicates
+            unique_caps = list(set(cap_numbers))
+            
+            # Improved sorting logic to handle alphanumeric Cap numbers (e.g., 1, 1A, A1)
+            def sort_key(cap):
+                match = re.match(r'([A-Z]*)([0-9]+)([A-Z]*)', cap)
+                if match:
+                    prefix, num, suffix = match.groups()
+                    return (prefix, int(num), suffix)
+                return (cap,)
+
+            unique_caps.sort(key=sort_key)
             
             print(f"Found {len(unique_caps)} unique Caps.")
             

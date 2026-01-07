@@ -1,0 +1,2024 @@
+<!DOCTYPE html><html lang="en" style="font-size:15px;" class="js flexbox flexboxlegacy canvas canvastext webgl no-touch geolocation postmessage no-websqldatabase indexeddb hashchange history draganddrop websockets rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms csstransforms3d csstransitions fontface generatedcontent video audio localstorage sessionstorage webworkers no-applicationcache svg inlinesvg smil svgclippaths"><head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="apple-touch-icon" href="https://www.elegislation.gov.hk/images/icon/apple/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://www.elegislation.gov.hk/images/icon/apple/apple-touch-icon-180x180.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="https://www.elegislation.gov.hk/images/icon/apple/apple-touch-icon-167x167.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="https://www.elegislation.gov.hk/images/icon/apple/apple-touch-icon-152x152.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="https://www.elegislation.gov.hk/images/icon/apple/apple-touch-icon-120x120.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="https://www.elegislation.gov.hk/images/icon/apple/apple-touch-icon-76x76.png">
+  <link rel="preload" as="image" href="https://www.elegislation.gov.hk/images/hkel_logo.png">
+  <link rel="preload" as="image" href="https://www.elegislation.gov.hk/images/mobile_hkel_logo.png">
+    <link rel="preload" as="image" href="https://www.elegislation.gov.hk/images/hkel_logo_text.png">
+  <link rel="preload" as="image" href="https://www.elegislation.gov.hk/images/mobile_hkel_logo_text.png">
+    <script type="text/javascript" charset="utf-8">
+  var isDesktopVersion = false;
+  var isMobileVersion = false;
+  var appFontSize = "default";
+  window.uiLanguage = "en";
+  window.ApplicationProperties = {"PRINT_FONT_CHANGE_USER_AGENT":"Chrome\\/(8[6-9]|9[0-9]|\\d{3,})","dateFormat":"dd/mm/yyyy","DESKTOP_MIN_WIDTH":"751","CONTEXT_ROOT":"","timeFormat":"00:00:00 (24-hour format)","LOAD_BALANCER_URL":"https://www.elegislation.gov.hk","printIcon":"Print this page","miLbl":"MI","SECURE_COOKIES":"Y","MOBILE_MAX_WIDTH":"750","hhLbl":"HH","ssLbl":"SS"};
+  window.iasSessionCheck = false;
+  window.iasSessionRemainingTimeInMs = -1;
+  window.iasSessionNearExpiryTimeInMs = -1;
+  </script>
+  <script type="text/javascript">window.LanguageOption=window.LanguageOption||{};(function(a,b,c){try{b(a,c,{value:"English"})}catch(e){a[c]="English"}})(window.LanguageOption,Object.defineProperty,'localeLanguage');</script>
+  <style type="text/css">
+  .loading {
+    background: url('https://www.elegislation.gov.hk/images/indicator.gif') center center no-repeat;
+    height: 20px;
+  }
+  .loading-error {
+    background: #FFC url('https://www.elegislation.gov.hk/images/icon/failed.gif') 10px center no-repeat;
+  }
+  .ac_loading {
+    background: white url('https://www.elegislation.gov.hk/images/indicator.gif') right center no-repeat;
+  }
+  </style>
+
+  <title>Hong Kong e-Legislation - Chapter Number Index</title>
+<link rel="icon" type="image/ico" href="https://www.elegislation.gov.hk/images/favicon.ico?v=2">
+
+  <!-- STYLES -->
+    <link rel="StyleSheet" href="/css/css.incl?HASH=f55064a36ee49a2d6369a1ee621094843e06d98f4e6ba0e2c805e52fd86dea3e467ff0100e9ddc4b7cea475956b2a3ad2920e9fa1223f8c4c844a2f866a46962&amp;lastMod=1763106106000&amp;minify=true&amp;type=css&amp;_os=3" type="text/css">
+    <link rel="StyleSheet" href="/css/customfont.css" type="text/css">
+<!-- EARLY SCRIPTS -->
+    <script type="text/javascript" src="/js.incl?HASH=ac2ba54274b7b34280d15bb21df9ad83a1b8ea07e1a878c5eead57fda86f387c27619767114fdfd5788a7c4824971e66a2cfa89feedc9cfbf0a1ac6879412d19&amp;lastMod=1736742488000&amp;minify=true&amp;type=js&amp;_os=3"></script>
+
+  <style type="text/css">
+    #filterButtonBar > div {
+      border-left: none;
+      border-right: none;
+      border-bottom: none;
+    }
+    
+    div.group-select {
+      text-align: center;
+    }
+    
+    a.group-selector {
+      margin: 0 5px;
+    }
+    
+    div#PIT_TYPE_group>div,div#TYPE_group>div {
+      float: none !important;
+    }
+    
+    small {
+      color: #636667;
+    }
+    
+    #TITLE_0 {
+      width: 100%;
+    }
+    
+    div#CHAPTER_NO_INDEX_GRID table.grid tr {
+      line-height: 1.6rem;
+    }
+    
+    div.no-download {
+      min-height: 1.6rem;
+    }
+    
+    div#CHAPTER_NO_INDEX_GRID table.grid tr td,
+    div#CHAPTER_NO_INDEX_GRID table.grid tr th {
+      padding: 5px;
+    }
+    
+    div#CHAPTER_NO_INDEX_GRID table.grid tr.grid-header > th:nth-child(3),
+    div#CHAPTER_NO_INDEX_GRID table.grid tr.grid-header > th:nth-child(4),
+    div#CHAPTER_NO_INDEX_GRID table.grid tr.grid-header > th:nth-child(5) {
+      text-align: center;
+    }
+    
+    @media only screen and (min-width: 751px) {
+      body.font-size-largest div#CHAPTER_NO_INDEX_GRID table.grid > colgroup > col:nth-child(3),
+      body.font-size-largest div#CHAPTER_NO_INDEX_GRID table.grid > colgroup > col:nth-child(4),
+      body.font-size-largest div#CHAPTER_NO_INDEX_GRID table.grid > colgroup > col:nth-child(5) {
+        width: 11% !important;
+      }
+    }
+    
+     @media only screen and (max-width: 475px) {
+      div#CHAPTER_NO_INDEX_GRID table.grid > colgroup > col:nth-child(1){
+        width: 35% !important;
+      }
+    }
+    
+    div#CHAPTER_NO_INDEX_GRID table.grid .footable-row-detail-value > div > div > div:nth-child(2) {
+      padding-left: 20px;
+      padding-top: 5px;
+      padding-bottom: 5px;
+    }
+    
+    div#CHAPTER_NO_INDEX_GRID table.grid td, 
+    div#CHAPTER_NO_INDEX_GRID table.grid th {
+      border-right: 1px solid #ddd !important;
+      border-left: 1px solid #ddd !important;
+    }
+    
+    div#CHAPTER_NO_INDEX_GRID table.grid tr:not(:first-child) {
+      border-top: 1px solid #ddd;
+    }
+    
+    div.download-icons {
+      display: table; 
+      width: 100%;
+      line-height: 1.6rem;
+    }
+    
+    div.download-icons > div {
+      display: table-row;
+    }
+    
+    div.download-icons > div > div {
+      display: table-cell;
+      text-align: center;
+    }
+    
+    div.download-icons .hide-icon {
+      visibility: hidden;
+    }
+    
+    div.legend-notes {
+      display: table;
+    }
+    
+    div.legend-notes > div {
+      display: table-row;
+    }
+    
+    div.legend-notes > div > div {
+      display: table-cell;
+    }
+    
+    div.legend-notes .note-icon {
+      padding: 2px 4px 2px 2px;
+      text-align: center;
+    }
+    
+    div.legend-notes > div > div.note-icon + div {
+      vertical-align: middle;
+    }
+    
+    #PRC_NOTE {
+      display: none;
+    }
+    
+    @media only screen and (max-width: 320px) {
+      body:not(.desktop-parent) .notitle.page_container {
+        height: auto;
+      }
+      
+      body:not(.desktop-parent) .notitle.page_container:after {
+        width: auto;
+      }
+    }    
+    
+    .ql_label {
+      font-family: "Alternate VLIS Font", Arial, "DFKai-SB", "標楷體", sans-serif;
+      font-size: 1rem;
+      font-weight: bold;
+    }
+    
+    .ql_label.chi {
+      font-family: "Microsoft JhengHei", "Alternate VLIS Font", Arial, "DFKai-SB", "標楷體", sans-serif;
+      font-size: 1.1rem;
+    }
+    
+    #QUICKLINK_NOTE {
+      display: none;
+    }
+    
+    #QUICKLINK_NOTE > * {
+      vertical-align: middle;
+    }
+  </style>
+<link rel="stylesheet" type="text/css" href="/css/css.incl?HASH=304680be7d688a66c2f3a2b053171d9b4e704ced0513b519889e05ec702b1a7bdf32bfddf9e40a2c2a0d28ce85d4879943f3897d12abab0a33fe56df0c61bdf3&amp;lastMod=1663660410000&amp;minify=true&amp;type=css&amp;_os=3" media="all"><meta class="foundation-data-attribute-namespace" property="foundation-data-attribute-namespace" content="foundation-data-attribute-namespace"><meta class="foundation-mq-xxlarge" property="foundation-mq-xxlarge" content="foundation-mq-xxlarge"><meta class="foundation-mq-xlarge-only" property="foundation-mq-xlarge-only" content="foundation-mq-xlarge-only"><meta class="foundation-mq-xlarge" property="foundation-mq-xlarge" content="foundation-mq-xlarge"><meta class="foundation-mq-large-only" property="foundation-mq-large-only" content="foundation-mq-large-only"><meta class="foundation-mq-large" property="foundation-mq-large" content="foundation-mq-large"><meta class="foundation-mq-medium-only" property="foundation-mq-medium-only" content="foundation-mq-medium-only"><meta class="foundation-mq-medium" property="foundation-mq-medium" content="foundation-mq-medium"><meta class="foundation-mq-small-only" property="foundation-mq-small-only" content="foundation-mq-small-only"><meta class="foundation-mq-small" property="foundation-mq-small" content="foundation-mq-small"><style></style><meta class="foundation-mq-topbar" property="foundation-mq-topbar" content="foundation-mq-topbar"></head>
+
+
+<body class="non-modal font-size-default chrome pfc">
+  <div id="MainOuterWrapper">
+  	<div id="MainContainerWrapper">
+  		<div id="MainContainer">
+
+  
+
+
+<span id="topAnchor"></span>
+<div id="Header">
+  <div id="TopBar">
+            <a href="#" id="MobileVersion">Mobile Version</a>
+        <ul id="LanguageLinks" class="divided-list">
+                                                                                                              <li class="chiLangLink first">
+                      <a href="/index/chapternumber?TYPE=1&amp;TYPE=2&amp;TYPE=3&amp;LANGUAGE=E&amp;p0=1&amp;_lang=zh-Hant-HK" aria-label="繁">繁</a>   
+                  </li>
+                                                        <li class="chiLangLink">
+                      <a href="/index/chapternumber?TYPE=1&amp;TYPE=2&amp;TYPE=3&amp;LANGUAGE=E&amp;p0=1&amp;_lang=sc" aria-label="简">简</a>   
+                  </li>
+            </ul>
+  <ul id="FontsizeLinks" class="divided-list no-divider">
+    <li id="SmallFont" class="first"><a href="#" class="font-size-setting font-size-default active-setting" data-fontsize="default" onclick="FontSizeManager.setFontSize(this); return false;" aria-label="Default Font Size" tabindex="-1">A</a></li>
+    <li id="MediumFont"><a href="#" class="font-size-setting font-size-larger" data-fontsize="larger" onclick="FontSizeManager.setFontSize(this); return false;" aria-label="Larger Font Size">A</a></li>
+    <li id="LargeFont" class="last"><a href="#" class="font-size-setting font-size-largest" data-fontsize="largest" onclick="FontSizeManager.setFontSize(this); return false;" aria-label="Largest Font Size">A</a></li>
+  </ul>
+  <a href="https://www.elegislation.gov.hk/importantnotices" id="ImpNoticeDesktop">Important Notices</a>
+</div>
+  <a href="https://www.elegislation.gov.hk/" id="LogoLink">
+  	<div id="Logo" class="hkel-logo">
+  	  <img src="https://www.elegislation.gov.hk/images/hkel_logo.png" alt="logo: 電子版香港法例 - Hong Kong e-Legislation">
+  	        <img src="https://www.elegislation.gov.hk/images/hkel_logo_text.png" alt="logo: 電子版香港法例 - Hong Kong e-Legislation">
+  	    	</div>
+	</a>
+
+    
+
+<div id="BlueMaroonBar">
+  <nav class="top-bar" data-topbar="">
+  <ul class="title-area">
+    <li class="name">
+      <a href="https://www.elegislation.gov.hk/" id="MobileLogoLink">
+        <div id="MobileLogo" class="hkel-logo">
+          <img src="https://www.elegislation.gov.hk/images/mobile_hkel_logo.png" alt="logo: 電子版香港法例 - Hong Kong e-Legislation">
+                    <img src="https://www.elegislation.gov.hk/images/mobile_hkel_logo_text.png" alt="logo: 電子版香港法例 - Hong Kong e-Legislation">
+                  </div>
+      </a>
+    </li>
+    <li class="toggle-topbar menu-icon">
+      <a href="#" title="Toggle Menu" aria-label="Toggle Menu"><span>&nbsp;</span></a>
+    </li>
+  </ul><section class="top-bar-section">
+  <ul id="MainMenu" class="left">
+    	  		                    		    <li id="HOME" class="mfirst">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/"><span>Home</span></a>
+      
+            </li>
+  	    	  		          		    <li id="LRTS0110_SEARCH">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/search"><span>Search</span></a>
+      
+            </li>
+  	    	  		            		    <li id="BROWSE" class="has-dropdown not-click">    
+      <a class="no-visit" tabindex="0" onclick="javascript:void(0);"><span>Browse</span></a>
+      
+                  <ul class="dropdown menutop" data-depth="0"><li class="title back js-generated"><a href="javascript:void(0)">Back</a></li>
+                                                        <li id="ECRS0105_CHAP_IDX" class="mfirst">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/index/chapternumber"><span>Chapter Number Index</span></a>
+      
+            </li>
+                                              <li id="ECRS0100_CHI_IDX">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/index/chi/title"><span>Chinese Title Index (in Order of Number of Strokes of Chinese Character)</span></a>
+      
+            </li>
+                                              <li id="ECRS0101_ENG_IDX">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/index/en/title"><span>English Title Index (in Alphabetical Order)</span></a>
+      
+            </li>
+                                              <li id="ECRS0102_CHI_SUB">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/index/chi/subject"><span>Chinese Subject Index to Ordinances</span></a>
+      
+            </li>
+                                              <li id="ECRS0103_ENG_SUB">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/index/en/subject"><span>English Subject Index to Ordinances</span></a>
+      
+            </li>
+                                                        <li id="ECRS0104_CHRO_IDX" class="mlast">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/index/chronologicaltable"><span>Chronological Table of Ordinances</span></a>
+      
+            </li>
+                  </ul>
+            </li>
+  	    	  		          		    <li id="LRTS1002_GAZETTE">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/gazette"><span>Gazette</span></a>
+      
+            </li>
+  	    	  		          		    <li id="LRTS1001_EDITORIAL_RECORDS">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/editorialrecord"><span>Editorial Records</span></a>
+      
+            </li>
+  	    	  		                      		    <li id="OTHER_INFO" class="has-dropdown rightMenu not-click">    
+      <a class="no-visit" tabindex="0" onclick="javascript:void(0);"><span>Useful Information</span></a>
+      
+                  <ul class="dropdown menutop" data-depth="0"><li class="title back js-generated"><a href="javascript:void(0)">Back</a></li>
+                                                                  <li id="ERTS07_LOOSELEAF" class="mfirst rightMenu">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/looseleaf/issues"><span>Loose-leaf Edition</span></a>
+      
+            </li>
+                                                                    <li id="OTHER_PUB" class="has-dropdown mlast rightMenu not-click">    
+      <a class="no-visit" tabindex="0" onclick="javascript:void(0);"><span>Other Publications</span></a>
+      
+                                <ul class="dropdown menuchild" data-depth="1"><li class="title back js-generated"><a href="javascript:void(0)">Back</a></li>
+                                                                    <li id="DRAFT_AND_MAKING" class="has-dropdown mfirst rightMenu not-click">    
+      <a class="no-visit" tabindex="0" onclick="javascript:void(0);"><span>Drafting and Making<br>Legislation in Hong Kong</span></a>
+      
+                                        <ul class="dropdown menuchild menuchildfirst" data-depth="2"><li class="title back js-generated"><a href="javascript:void(0)">Back</a></li>
+                                                                  <li id="DRAFTING_LEG" class="mfirst rightMenu">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/draftingleg"><span>Drafting Legislation in Hong Kong—<br>A Guide to Styles and Practices</span></a>
+      
+            </li>
+                                                                  <li id="HOW_LEG_IS_MADE_IN_HK" class="mlast rightMenu">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/howlegismade"><span>How Legislation is Made in Hong Kong—<br>A Drafter’s View of the Process</span></a>
+      
+            </li>
+                  </ul>
+            </li>
+                                                          <li id="OTH_INFO_LEG_HK" class="has-dropdown rightMenu not-click">    
+      <a class="no-visit" tabindex="0" onclick="javascript:void(0);"><span>Articles</span></a>
+      
+                                <ul class="dropdown menuchild" data-depth="2"><li class="title back js-generated"><a href="javascript:void(0)">Back</a></li>
+                                                                  <li id="INTERPRETATION_OF_BIL_LEG" class="mfirst rightMenu">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/interpretbileg"><span>Interpretation of Bilingual Legislation</span></a>
+      
+            </li>
+                                                                  <li id="IS_IT_IN_OPERATION" class="mlast rightMenu">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/isitinoper"><span>Is It in Operation?</span></a>
+      
+            </li>
+                  </ul>
+            </li>
+                                                                  <li id="REFERENCES" class="mlast rightMenu">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/references"><span>References</span></a>
+      
+            </li>
+                  </ul>
+            </li>
+                  </ul>
+            </li>
+  	    	  		            		    <li id="OTHERS" class="has-dropdown not-click">    
+      <a class="no-visit" tabindex="0" onclick="javascript:void(0);"><span>Others</span></a>
+      
+                  <ul class="dropdown menutop" data-depth="0"><li class="title back js-generated"><a href="javascript:void(0)">Back</a></li>
+                                                        <li id="GENS1600_QR_CODE_GEN" class="mfirst">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/qrcodegenerator" target="_blank" onclick="javascript: $(this).closest('a').blur(); $('.top-bar.expanded .toggle-topbar').trigger('click.fndtn.topbar');"><span>Get QR Code</span></a>
+      
+            </li>
+                                              <li id="ERTS0310_BOOKMARK_LIST">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/mycollection"><span>My Collection</span></a>
+      
+            </li>
+                                              <li id="ERTS0200_PRINT_LIST">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/printlist"><span>Printing List</span></a>
+      
+            </li>
+                                                        <li id="SUBSCRIPTION" class="mlast">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/subscribe/email"><span>Feeds and Subscription</span></a>
+      
+            </li>
+                  </ul>
+            </li>
+  	    	  		                    		    <li id="IMPORTANT_NOTICES" class="mlast">    
+      <a class="no-visit" href="https://www.elegislation.gov.hk/importantnotices"><span>Important Notices</span></a>
+      
+            </li>
+  	    </ul>
+  </section>
+  
+  
+  
+  <span class="fa-cog fa blue-bar-el" id="SettingsIcon" tabindex="0" title="Options" aria-label="Options" role="button"></span>
+  <div id="MobileSettings">
+    <div class="settings-block">
+      <div class="classic-label-container {label:'Mode'} inputText isweb-ui lbl">
+        <span class="isweb-label">
+          <span class="label-text">Font Size</span><span class="label-colon">:</span>
+        </span>
+      </div>
+      
+      <div class="settings-buttons">
+        <input type="button" value="Default" style="font-size:15px" data-fontsize="default" class="font-size-setting active-setting" onclick="FontSizeManager.setFontSize(this); return false;">
+        <input type="button" value="Larger" style="font-size:17px" data-fontsize="larger" class="font-size-setting" onclick="FontSizeManager.setFontSize(this); return false;">
+        <input type="button" value="Largest" style="font-size:20px" data-fontsize="largest" class="font-size-setting" onclick="FontSizeManager.setFontSize(this); return false;">
+      </div>
+    </div>
+    
+    <div class="settings-block">
+      <div class="classic-label-container {label:'Mode'} inputText isweb-ui lbl">
+        <span class="isweb-label">
+          <span class="label-text">Language</span><span class="label-colon">:</span>
+        </span>
+      </div>
+      
+      <div class="settings-buttons">
+        <input type="button" value="English" data-lang-tag="en" class="active-setting">
+        <input id="M_BTN_LANG_TC" type="button" value="繁體" data-lang-tag="zh-Hant-HK">
+        <input type="button" value="简体" data-lang-tag="sc">
+        <script type="text/javascript" style="display: none;">
+          document.getElementById("M_BTN_LANG_TC").value = decodeURIComponent("%E7%B9%81%E9%AB%94");
+        </script>
+      </div>
+      
+      <div class="desktop-version-wrapper">
+        <input type="button" value="Desktop Version" class="desktop-version-btn">
+      </div>
+    </div>
+  </div>
+  
+  <span id="QuickSearchButton" tabindex="0" title="Quick Search" aria-label="Quick Search" class="blue-bar-el" role="button"></span>
+    <div id="QSWrapper">
+    <div id="QuickSearch">
+      <div id="QuickSearchTitle">Quick Search</div>
+      <div id="QCapNo" class="has-border with-options">
+        <div class="input-group">
+          <input type="hidden" name="QSACCapNoTitle">
+          <input type="text" id="QSCapNo" name="QSCapNo" title="Chapter Number or Chapter Title" placeholder="Enter Cap. No. or Cap. Title" aria-label="Enter Chapter Number or Chapter Title" class="has-right ac_input" autocomplete="off"><input type="text" id="QSProvNo" title="Section/Rule Number" placeholder="Section/Rule No." class="has-right" aria-label="Section/Rule Number"><button type="button" class="search-button" aria-label="Search"><i class="fa fa-search"></i></button>
+          <script type="text/javascript" style="display:none;">
+            var qsCapTitleACOpts =  {
+              requestDelay: 450,
+              resultColumn : "VALUE",
+              headerLabels: [{CODE:"Code"}, {VALUE:'Title'}],
+              displayedCols : ['VALUE'],
+              searchCols : ['VALUE'],
+              scrollHeight: 220,
+              mustMatch: false,
+              matchContains: true,
+              selectFirst: false,
+              dropDownTrigger: false,
+              minChars: 1,
+              resultsClass: "ac_results qs_ac_results",
+              maxDisplayChars: 0,
+              maxItemsShownOnLoad: 8,
+              noListIfLostFocus: true,
+              selectValOnKeyScroll: true,
+              elementWidth: function() {
+                return $("#QCapNo > .input-group").width();
+              },
+              extraParams: {
+                LANGUAGE: (uiLanguage  || "en") == "en" ? "E": "C"
+              },
+              formatInput: function(input) {
+                if (/^([aA]?[0-9]+[a-zA-Z]*)$/g.test(input.trim())) {
+                  return "";  
+                }
+                return input.replace(/"/g, "");
+              },
+              doOnEnter: function(e) {
+                $("#QCapNo .search-button").click();
+              }
+            };
+          </script>
+        </div>
+       
+       <div class="options-container" id="ProvNoOptionsContainer">
+         <a href="#" class="dropdown-control no-visit option-link" data-dropdown="ProvNoOptions">Option <i class="fa fa-caret-down"></i></a>
+         <ul class="option-links f-dropdown" id="ProvNoOptions" data-dropdown-content="">
+                      <li class="selected"><a class="link no-visit" href="#" onclick="event.preventDefault();return false;" aria-label="Section/Rule Number">Section/Rule No.</a></li>
+                      <li><a class="link no-visit" href="#" onclick="event.preventDefault();return false;" aria-label="Part Number">Part No.</a></li>
+                      <li><a class="link no-visit" href="#" onclick="event.preventDefault();return false;" aria-label="Schedule Number">Schedule No.</a></li>
+                      <li><a class="link no-visit" href="#" onclick="event.preventDefault();return false;" aria-label="Appendix Number">Appendix No.</a></li>
+                      <li><a class="link no-visit" href="#" onclick="event.preventDefault();return false;" aria-label="Annex Number">Annex No.</a></li>
+                    </ul>
+       </div>
+      </div>
+      
+      <div class="v-separator"></div>
+      
+      <div id="QKeyword" class="with-options">
+        <div class="input-group">
+          <input type="text" id="QSKeyword" name="QSKeyword" maxlength="100" title="Keywords" placeholder="Enter keyword(s)" class="has-right" aria-label="Enter keywords"><button type="button" class="search-button" aria-label="Search"><i class="fa fa-search"></i></button>
+        </div>
+        <div class="options-container" id="WordSearchOptionsContainer">
+          <a href="#" class="dropdown-control no-visit option-link" data-dropdown="WordSearchOptions">Type <i class="fa fa-caret-down"></i></a>
+          <ul class="option-links f-dropdown" id="WordSearchOptions" data-dropdown-content="">
+            <li class="selected"><a class="link no-visit" href="#" onclick="event.preventDefault();return false;">All</a></li>
+                        <li><a class="link no-visit" href="#" onclick="event.preventDefault();return false;">Ordinance</a></li>
+                        <li><a class="link no-visit" href="#" onclick="event.preventDefault();return false;">Subsidiary Legislation</a></li>
+                        <li><a class="link no-visit" href="#" onclick="event.preventDefault();return false;">Instrument</a></li>
+                      </ul>
+        </div>
+        
+        <div class="options-container show-option" id="ProvNoOptions2Container">
+         <a href="#" class="dropdown-control no-visit option-link" data-dropdown="ProvNoOptions2">Option <i class="fa fa-caret-down"></i></a>
+         <ul class="option-links f-dropdown" id="ProvNoOptions2" data-dropdown-content="">
+                      <li class="selected"><a class="link no-visit" href="#" onclick="event.preventDefault();return false;">Section/Rule No.</a></li>
+                      <li><a class="link no-visit" href="#" onclick="event.preventDefault();return false;">Part No.</a></li>
+                      <li><a class="link no-visit" href="#" onclick="event.preventDefault();return false;">Schedule No.</a></li>
+                      <li><a class="link no-visit" href="#" onclick="event.preventDefault();return false;">Appendix No.</a></li>
+                      <li><a class="link no-visit" href="#" onclick="event.preventDefault();return false;">Annex No.</a></li>
+                    </ul>
+       </div>
+      </div>
+    </div>
+  </div>
+    
+  </nav>
+  
+</div>
+    
+  <div id="NavLink">
+  	<a href="https://www.elegislation.gov.hk/" id="NavLinkHome" class="nav-entry home no-visit">
+      <i class="fa fa-home" aria-label="Home"></i>
+      <span>Home</span></a>
+        <span class="nav-entry">
+      Chapter Number Index
+    </span>
+      </div>
+
+
+
+  
+
+
+</div>
+
+  <div id="Content">
+
+    <div class="portlet ">
+  <div class="portlet-header"><h1>Chapter Number Index</h1></div>
+  <div class="portlet-content">
+
+      <!-- INFO/ERROR SECTION -->
+
+<div id="MESSAGE_" style="display: none;">
+	<div class="info-msg" id="INFO_MSG" style="display:none;">
+    <div class="msg-info">&nbsp;</div>
+    <div class="msg-text"></div>
+    <div style="clear:both;"></div>
+  </div>
+  <div class="error-msg" id="ERROR_MSG">
+    <div class="msg-info">&nbsp;</div>
+    <div class="msg-text">Please correct the following error(s):</div>
+    
+      </div>
+</div>
+
+      <form name="proj_form" method="post" class="${class}" action="/index/chapternumber" onsubmit="return false;" novalidate="novalidate">
+    <input type="hidden" name="MODE" value="1">
+  <input type="hidden" name="_CSRF_TOKEN" value="5f9urGCG8pO5Wmxe2axjQBt+gJS//yhrl6JGMLQMVDUw15VIFKMrPamf3mszuKq8I9l8Gc1f8AlS3oYSJ3tECA==">
+  <input type="hidden" name="BO_STATE" value="0">
+
+
+        
+          <div class="panel  expanded ">
+	<div class="panel-content" style="display:block;">
+
+          <div class="group-row">
+
+            <div class="group-col mobile-block">
+
+
+
+
+
+
+
+
+
+
+
+	
+
+<div id="CAP_NO_FR_0_LBL" class="classic-label-container {label:'Chapter / Instrument No.'} inputText isweb-ui lbl">
+<label for="CAP_NO_FR_0">
+	<span class="label-text">
+	    <img class="error-icon" src="https://www.elegislation.gov.hk/images/error.gif" alt="" style="display:none">Chapter  /  Instrument No.<span class="mobile label-colon">:</span><span class="mobile mandatory-asterisk">*</span>
+	  </span>
+	  <span class="desktop label-colon">:</span>
+	  <span class="desktop mandatory-asterisk">*</span>
+</label>
+</div></div>
+
+            <div class="group-col">
+
+<div class="rangeContainer" style="width: auto; clear:both; min-width:280px;">
+    <div style="width: auto; float: left;">
+    
+
+
+
+
+
+
+
+    <input size="5" maxlength="5" name="CAP_NO_FR" id="CAP_NO_FR_0" placeholder="Chapter / Instrument No. (from)" type="text" title="Maximum number of characters allowed is 5" class="{labelelement:'CAP_NO_FR_0_LBL',datatype:'String',label:'Chapter / Instrument No. (from)',autoFormat:{datatype:'String'}} inputText ui-widget-content">
+
+      </div>
+  <div style="width: auto; float: left;">
+    <label class="label-text" style="vertical-align:top;display: inline-block;margin-top: 4px;" for="CAP_NO_TO_0">to</label>
+    <div class="toFldContainer">
+    
+
+
+
+
+
+
+
+    <input size="5" maxlength="5" name="CAP_NO_TO" id="CAP_NO_TO_0" placeholder="Chapter / Instrument No. (to)" type="text" title="Maximum number of characters allowed is 5" class="{labelelement:'CAP_NO_FR_0_LBL',datatype:'String',label:'Chapter / Instrument No. (to)',autoFormat:{datatype:'String'}} inputText ui-widget-content">
+
+        </div>
+  </div>
+  <div style="clear: both;"></div>
+</div>
+</div>
+
+          </div>
+
+          <div class="group-row">
+
+            <div class="group-col mobile-block">
+
+
+
+
+
+
+
+
+
+
+
+	
+
+<div id="TITLE_0_LBL" class="classic-label-container {label:'Chapter / Instrument Title'} inputText isweb-ui lbl">
+<label for="TITLE_0">
+	<span class="label-text">
+	    <img class="error-icon" src="https://www.elegislation.gov.hk/images/error.gif" alt="" style="display:none">Chapter  /  Instrument Title<span class="mobile label-colon">:</span><span class="mobile mandatory-asterisk">*</span>
+	  </span>
+	  <span class="desktop label-colon">:</span>
+	  <span class="desktop mandatory-asterisk">*</span>
+</label>
+</div></div>
+
+            <div class="group-col">
+
+
+
+
+
+
+
+
+    <input size="1000" maxlength="1000" name="TITLE" id="TITLE_0" placeholder="Chapter / Instrument Title" type="text" title="Maximum number of characters allowed is 1000" class="{datatype:'String',label:'Chapter / Instrument Title',autoFormat:{datatype:'String'}} inputText ui-widget-content">
+</div>
+
+          </div>
+
+          <div class="group-row">
+
+            <div class="group-col mobile-block">
+
+
+
+
+
+
+
+
+
+
+
+	
+
+<div id="STATUS_0_LBL" class="classic-label-container {label:'Legislation Status'} number isweb-ui lbl">
+<label for="STATUS_0">
+	<span class="label-text">
+	    <img class="error-icon" src="https://www.elegislation.gov.hk/images/error.gif" alt="" style="display:none">Legislation Status<span class="mobile label-colon">:</span><span class="mobile mandatory-asterisk">*</span>
+	  </span>
+	  <span class="desktop label-colon">:</span>
+	  <span class="desktop mandatory-asterisk">*</span>
+</label>
+</div></div>
+
+            <div class="group-col">
+
+
+
+
+
+
+
+
+		  <select name="STATUS" id="STATUS_0" class="{min:'-99999',max:'99999',format:'#,##0',label:'Legislation Status',autoFormat:{format:'#,##0'}} number  ui-widget-content">
+			<option value="">&nbsp;</option>
+			
+
+
+
+
+
+
+
+	<option value="101">
+		Amendments Incorporated
+	</option>
+
+
+
+
+
+
+
+
+	<option value="7">
+		Cancelled
+	</option>
+
+
+
+
+
+
+
+
+	<option value="30">
+		Ceased to apply
+	</option>
+
+
+
+
+
+
+
+
+	<option value="8">
+		Ceased to be in force
+	</option>
+
+
+
+
+
+
+
+
+	<option value="9">
+		Ceased to have effect
+	</option>
+
+
+
+
+
+
+
+
+	<option value="10">
+		Expired
+	</option>
+
+
+
+
+
+
+
+
+	<option value="11">
+		Had its effect
+	</option>
+
+
+
+
+
+
+
+
+	<option value="1">
+		In effect
+	</option>
+
+
+
+
+
+
+
+
+	<option value="12">
+		Not adopted as the Laws of the HKSAR
+	</option>
+
+
+
+
+
+
+
+
+	<option value="6">
+		Not yet in operation
+	</option>
+
+
+
+
+
+
+
+
+	<option value="13">
+		Omitted
+	</option>
+
+
+
+
+
+
+
+
+	<option value="14">
+		Omitted as expired
+	</option>
+
+
+
+
+
+
+
+
+	<option value="15">
+		Omitted as spent
+	</option>
+
+
+
+
+
+
+
+
+	<option value="16">
+		Omitted as withdrawn
+	</option>
+
+
+
+
+
+
+
+
+	<option value="28">
+		Other
+	</option>
+
+
+
+
+
+
+
+
+	<option value="3">
+		Partially in operation
+	</option>
+
+
+
+
+
+
+
+
+	<option value="4">
+		Partially suspended
+	</option>
+
+
+
+
+
+
+
+
+	<option value="23">
+		Proposed
+	</option>
+
+
+
+
+
+
+
+
+	<option value="29">
+		Rearranged
+	</option>
+
+
+
+
+
+
+
+
+	<option value="17">
+		Repealed
+	</option>
+
+
+
+
+
+
+
+
+	<option value="18">
+		Repealed but retained
+	</option>
+
+
+
+
+
+
+
+
+	<option value="19">
+		Replaced
+	</option>
+
+
+
+
+
+
+
+
+	<option value="20">
+		Rescinded
+	</option>
+
+
+
+
+
+
+
+
+	<option value="21">
+		Revoked
+	</option>
+
+
+
+
+
+
+
+
+	<option value="22">
+		Spent
+	</option>
+
+
+
+
+
+
+
+
+	<option value="27">
+		Superseded
+	</option>
+
+
+
+
+
+
+
+
+	<option value="5">
+		Suspended
+	</option>
+
+
+
+
+
+
+
+
+	<option value="100">
+		Withdrawn
+	</option>
+		</select>
+	</div>
+
+          </div>
+
+          <div class="group-row">
+
+            <div class="group-col mobile-block textarea-label">
+
+
+
+
+
+
+
+
+
+
+
+	
+
+<div id="TYPE_0_LBL" class="classic-label-container {label:'Type'} inputText isweb-ui lbl">
+<span class="isweb-label">
+	<span class="label-text">
+	    <img class="error-icon" src="https://www.elegislation.gov.hk/images/error.gif" alt="" style="display:none">Type<span class="mobile label-colon">:</span><span class="mobile mandatory-asterisk">*</span>
+	  </span>
+	  <span class="desktop label-colon">:</span>
+	  <span class="desktop mandatory-asterisk">*</span>
+</span>
+</div></div>
+
+            <div class="group-col">
+
+
+
+
+
+
+
+
+			<fieldset style="margin-bottom: -5px;">
+            <legend style="display:none">Type</legend>
+      		  <div id="TYPE_group" class="input-group">
+		    
+
+
+
+
+
+
+
+ 			<div style="width: auto;" class="input-group-item">
+						  <label id="TYPE_0_0_LBL" for="TYPE_0_0" style="vertical-align: text-bottom;">
+			  			 <input value="1" name="TYPE" id="TYPE_0_0" type="checkbox" class="{labelelement:'TYPE_0_LBL',groupContainer:'TYPE_0',label:'Type',required:true} checkbox inputText" checked="">
+							  <span class="chk">Ordinance</span>
+				</label>
+					</div>
+	
+
+
+
+
+
+
+
+ 			<div style="width: auto;" class="input-group-item">
+						  <label id="TYPE_group_1_LBL" for="TYPE_group_1" style="vertical-align: text-bottom;">
+			  			 <input value="2" name="TYPE" id="TYPE_group_1" type="checkbox" class="{labelelement:'TYPE_group_LBL'} checkbox inputText" checked="">
+							  <span class="chk">Subsidiary Legislation</span>
+				</label>
+					</div>
+	
+
+
+
+
+
+
+
+ 			<div style="width: auto;" class="input-group-item">
+						  <label id="TYPE_group_2_LBL" for="TYPE_group_2" style="vertical-align: text-bottom;">
+			  			 <input value="3" name="TYPE" id="TYPE_group_2" type="checkbox" class="{labelelement:'TYPE_group_LBL'} checkbox inputText" checked="">
+							  <span class="chk">Instrument</span>
+				<small>(e.g. Basic Law, NPCSC's interpretations and other constitutional instruments)</small></label>
+					</div>
+			  </div>
+		</fieldset>
+	 </div>
+
+          </div>
+
+          
+          <!-- BUTTON BAR -->
+  <div id="filterButtonBar" class="btnbar-container">
+  	  <div class="btn_sep">
+	  <div class="btnbar">
+  
+            
+            
+            
+            
+
+
+
+
+
+
+
+<input type="button" id="BTN_CLEAR" class="btn_s5 normalButton ui-state-default  ui-button" value="Clear">
+            
+
+
+
+
+
+
+
+<input type="button" id="BTN_SEARCH" class="btn_s5 btn_s5h normalButton ui-state-active  ui-button" value="Search">
+          	<div style="clear:both"></div>
+  </div>
+    	</div>
+  </div>
+
+                    
+        	</div>
+</div>
+
+                
+        
+          <div class="panel has-note  expanded " id="gridPanel" style="position: relative; zoom: 1;">
+	<div class="panel-header" onclick="togglePanel(this)" tabindex="0">
+	          <i class="fa fa-caret-down"></i>
+    			<div class="panel-caption"><h2>Chapter Number Index Entries</h2></div>
+	</div>
+	<div class="panel-content" style="display:block;">
+
+          
+          <div class="panel-note" id="QUICKLINK_NOTE" style="display: none;">
+            <span class="ql_label">Quick Link:</span> <span><a href="https://www.elegislation.gov.hk/instrumentquicklink" target="_blank">Click here</a> for quick access to the current version of the Constitution of the People’s Republic of China, the Basic Law, and the National Security Law.</span>
+          </div>
+          
+          <div id="groupSelect" class="group-select"><span class="isweb-label">Show: </span><a href="javascript:reloadGrid('');" id="all" class="group-selector selected">All</a><a href="javascript:reloadGrid('1-100');" id="1-100" class="group-selector">1-100</a><a href="javascript:reloadGrid('101-200');" id="101-200" class="group-selector">101-200</a><a href="javascript:reloadGrid('201-300');" id="201-300" class="group-selector">201-300</a><a href="javascript:reloadGrid('301-400');" id="301-400" class="group-selector">301-400</a><a href="javascript:reloadGrid('401-500');" id="401-500" class="group-selector">401-500</a><a href="javascript:reloadGrid('501-600');" id="501-600" class="group-selector">501-600</a><a href="javascript:reloadGrid('601-700');" id="601-700" class="group-selector">601-700</a><a href="javascript:reloadGrid('1001-1100');" id="1001-1100" class="group-selector">1001-1100</a><a href="javascript:reloadGrid('1101-1200');" id="1101-1200" class="group-selector">1101-1200</a><a href="javascript:reloadGrid('O');" id="O" class="group-selector">Others</a></div>
+          <br>
+          
+          <div id="PRC_NOTE" style="display: none;">
+            <a target="_blank" href="../faq#faq26">Arrangement of Instruments</a><br>Please <a href="../prcexplanation">click here</a> for Explanations relating to the Instruments below.
+          </div>
+          
+          		<div id="CHAPTER_NO_INDEX_GRID" class="grid_container">
+	  	    
+	  	            
+            
+            
+            
+          		<div class="notitle page_container"><label class="grid-go-to-page"><span class="hide-in-mobile grid-goto-label">Go To Page: </span><input type="number" pattern="\d*" max="9999" min="0" class="grid-go-to-page-input" title="Go To Page" name="GO_TO_PAGE" placeholder="Go To"></label> <span class="grid-current-page" aria-label="Go to page 1"><span aria-hidden="true">1</span></span> <a href="#p0=2&amp;a0=&amp;gl=0" class="grid-link grid-page" aria-label="Go to page 2"><span aria-hidden="true">2</span></a> <a href="#p0=3&amp;a0=&amp;gl=0" class="grid-link grid-page" aria-label="Go to page 3"><span aria-hidden="true">3</span></a> <a href="#p0=4&amp;a0=&amp;gl=0" class="grid-link grid-page" aria-label="Go to page 4"><span aria-hidden="true">4</span></a> <a href="#p0=5&amp;a0=&amp;gl=0" class="grid-link grid-page" aria-label="Go to page 5"><span aria-hidden="true">5</span></a> <a href="#p0=2&amp;a0=&amp;gl=0" class="grid-link grid-page grid-page-next" aria-label="Go to next page"><span>Next Page</span><span class="mobile-pagination" aria-hidden="true">›</span></a> <a href="#p0=158&amp;a0=&amp;gl=0" class="grid-link grid-page grid-page-last" aria-label="Go to last page"><span>Last</span><span class="mobile-pagination" aria-hidden="true">»</span></a> | <a href="#a0=true&amp;gl=0" class="grid-link grid-show-all">All</a> </div><div class="grid-content"><table class="grid" title="Chapter Number Index Entries" style="border-spacing: 0px;"><colgroup><col style="width: 15%;"><col><col style="width: 10%;"><col style="width: 10%;"><col style="width: 10%;"></colgroup><thead><tr class="grid-header"><th data-toggle="true">Chapter / Instrument No.</th><th>Chapter / Instrument Title</th><th>Bilingual</th><th>English</th><th>Chinese</th></tr></thead><tbody><tr class="even {_GRID_FIRST_ROW:'true'}"><td style="text-align: left;"><a id="tag1"></a><div style="padding-left:0px;">1</div></td><td style="text-align: left;"><a href="/hk/cap1" class="hklm_ref" target="LRTS01" style="padding-left:0px; display: block;">Interpretation and General Clauses Ordinance</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap1!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1!en.pdf" onclick="openPDF('/hk/cap1!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap1!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="odd"><td style="text-align: left;"><a id="tag1A"></a><div style="padding-left:20px;">1A</div></td><td style="text-align: left;"><a href="/hk/cap1A" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Administrative Appeals Rules</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1A!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap1A!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1A!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1A!en.pdf" onclick="openPDF('/hk/cap1A!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1A!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1A!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap1A!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1A!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="even"><td style="text-align: left;"><a id="tag1B"></a><div style="padding-left:20px;">1B</div></td><td style="text-align: left;"><a href="/hk/cap1B" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Fees for Official Signatures and Miscellaneous Services Notice (Repealed)</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1B!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap1B!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1B!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="no-download">—</div></td><td style="text-align: center;"><div class="no-download">—</div></td></tr><tr class="odd"><td style="text-align: left;"><a id="tag1C"></a><div style="padding-left:20px;">1C</div></td><td style="text-align: left;"><a href="/hk/cap1C" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Specification of Public Offices Notice</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1C!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap1C!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1C!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1C!en.pdf" onclick="openPDF('/hk/cap1C!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1C!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1C!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap1C!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1C!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="even"><td style="text-align: left;"><a id="tag1D"></a><div style="padding-left:20px;">1D</div></td><td style="text-align: left;"><a href="/hk/cap1D" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Deputy Director of Immigration (Powers and Duties) Notice</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1D!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap1D!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1D!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1D!en.pdf" onclick="openPDF('/hk/cap1D!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1D!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap1D!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap1D!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap1D!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="odd"><td style="text-align: left;"><a id="tag2"></a><div style="padding-left:0px;">2</div></td><td style="text-align: left;"><a href="/hk/cap2" class="hklm_ref" target="LRTS01" style="padding-left:0px; display: block;">Public Finance Ordinance</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2!en.pdf" onclick="openPDF('/hk/cap2!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="even"><td style="text-align: left;"><a id="tag2A"></a><div style="padding-left:20px;">2A</div></td><td style="text-align: left;"><a href="/hk/cap2A" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Capital Works Reserve Fund</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2A!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2A!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2A!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2A!en.pdf" onclick="openPDF('/hk/cap2A!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2A!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2A!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2A!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2A!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="odd"><td style="text-align: left;"><a id="tag2B"></a><div style="padding-left:20px;">2B</div></td><td style="text-align: left;"><a href="/hk/cap2B" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Capital Investment Fund</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2B!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2B!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2B!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2B!en.pdf" onclick="openPDF('/hk/cap2B!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2B!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2B!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2B!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2B!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="even"><td style="text-align: left;"><a id="tag2C"></a><div style="padding-left:20px;">2C</div></td><td style="text-align: left;"><a href="/hk/cap2C" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Loan Fund</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2C!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2C!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2C!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2C!en.pdf" onclick="openPDF('/hk/cap2C!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2C!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2C!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2C!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2C!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="odd"><td style="text-align: left;"><a id="tag2D"></a><div style="padding-left:20px;">2D</div></td><td style="text-align: left;"><a href="/hk/cap2D" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Lotteries Fund</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2D!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2D!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2D!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2D!en.pdf" onclick="openPDF('/hk/cap2D!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2D!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2D!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2D!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2D!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="even"><td style="text-align: left;"><a id="tag2E"></a><div style="padding-left:20px;">2E</div></td><td style="text-align: left;"><a href="/hk/cap2E" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Civil Service Pension Reserve Fund</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2E!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2E!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2E!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2E!en.pdf" onclick="openPDF('/hk/cap2E!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2E!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2E!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2E!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2E!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="odd"><td style="text-align: left;"><a id="tag2F"></a><div style="padding-left:20px;">2F</div></td><td style="text-align: left;"><a href="/hk/cap2F" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Electrical and Mechanical Services Department Workshop Services Suspense Account (Cancelled)</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2F!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2F!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2F!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="no-download">—</div></td><td style="text-align: center;"><div class="no-download">—</div></td></tr><tr class="even"><td style="text-align: left;"><a id="tag2G"></a><div style="padding-left:20px;">2G</div></td><td style="text-align: left;"><a href="/hk/cap2G" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Financial Secretary Incorporated Suspense Account</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2G!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2G!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2G!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2G!en.pdf" onclick="openPDF('/hk/cap2G!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2G!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2G!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2G!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2G!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="odd"><td style="text-align: left;"><a id="tag2H"></a><div style="padding-left:20px;">2H</div></td><td style="text-align: left;"><a href="/hk/cap2H" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Special Coin Suspense Account</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2H!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2H!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2H!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2H!en.pdf" onclick="openPDF('/hk/cap2H!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2H!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2H!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2H!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2H!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="even"><td style="text-align: left;"><a id="tag2I"></a><div style="padding-left:20px;">2I</div></td><td style="text-align: left;"><a href="/hk/cap2I" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Unallocated Stores Suspense Account</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2I!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2I!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2I!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2I!en.pdf" onclick="openPDF('/hk/cap2I!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2I!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2I!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2I!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2I!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="odd"><td style="text-align: left;"><a id="tag2J"></a><div style="padding-left:20px;">2J</div></td><td style="text-align: left;"><a href="/hk/cap2J" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Correctional Services Industries Suspense Account</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2J!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2J!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2J!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2J!en.pdf" onclick="openPDF('/hk/cap2J!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2J!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2J!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2J!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2J!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="even"><td style="text-align: left;"><a id="tag2K"></a><div style="padding-left:20px;">2K</div></td><td style="text-align: left;"><a href="/hk/cap2K" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Electrical and Mechanical Services Department Suspense Account (Cancelled)</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2K!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2K!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2K!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="no-download">—</div></td><td style="text-align: center;"><div class="no-download">—</div></td></tr><tr class="odd"><td style="text-align: left;"><a id="tag2L"></a><div style="padding-left:20px;">2L</div></td><td style="text-align: left;"><a href="/hk/cap2L" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Disaster Relief Fund</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2L!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2L!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2L!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2L!en.pdf" onclick="openPDF('/hk/cap2L!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2L!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2L!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2L!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2L!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="even"><td style="text-align: left;"><a id="tag2M"></a><div style="padding-left:20px;">2M</div></td><td style="text-align: left;"><a href="/hk/cap2M" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Fees for Official Signatures and Miscellaneous Services Notice</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2M!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2M!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2M!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2M!en.pdf" onclick="openPDF('/hk/cap2M!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2M!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2M!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2M!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2M!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr><tr class="odd last {_GRID_LAST_ROW:'true'}"><td style="text-align: left;"><a id="tag2N"></a><div style="padding-left:20px;">2N</div></td><td style="text-align: left;"><a href="/hk/cap2N" class="hklm_ref" target="LRTS01" style="padding-left:20px; display: block;">Water Supplies Department Suspense Account</a></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2N!en-zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2N!en-zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2N!en-zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2N!en.pdf" onclick="openPDF('/hk/cap2N!en.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2N!en.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td><td style="text-align: center;"><div class="download-icons"><div><div><a href="/hk/cap2N!zh-Hant-HK.pdf" onclick="openPDF('/hk/cap2N!zh-Hant-HK.pdf?FROMCAPINDEX=Y'); return false;"><img src="/images/icon/pdf_verified.gif" class="pdf-link" alt="Download Verified PDF (with legal status)" title="Download Verified PDF (with legal status)"></a></div><div><a href="/hk/cap2N!zh-Hant-HK.assist.rtf?FROMCAPINDEX=Y"><img src="/images/icon/rtf.gif" class="rtf-link" alt="Download RTF (with no legal status)" title="Download RTF (with no legal status)"></a></div></div></div></td></tr></tbody></table></div><div class="notitle page_container bottom-pagination"><label class="grid-go-to-page"><span class="hide-in-mobile grid-goto-label">Go To Page: </span><input type="number" pattern="\d*" max="9999" min="0" class="grid-go-to-page-input" title="Go To Page" name="GO_TO_PAGE" placeholder="Go To"></label> <span class="grid-current-page" aria-label="Go to page 1"><span aria-hidden="true">1</span></span> <a href="#p0=2&amp;a0=&amp;gl=0" class="grid-link grid-page" aria-label="Go to page 2"><span aria-hidden="true">2</span></a> <a href="#p0=3&amp;a0=&amp;gl=0" class="grid-link grid-page" aria-label="Go to page 3"><span aria-hidden="true">3</span></a> <a href="#p0=4&amp;a0=&amp;gl=0" class="grid-link grid-page" aria-label="Go to page 4"><span aria-hidden="true">4</span></a> <a href="#p0=5&amp;a0=&amp;gl=0" class="grid-link grid-page" aria-label="Go to page 5"><span aria-hidden="true">5</span></a> <a href="#p0=2&amp;a0=&amp;gl=0" class="grid-link grid-page grid-page-next" aria-label="Go to next page"><span>Next Page</span><span class="mobile-pagination" aria-hidden="true">›</span></a> <a href="#p0=158&amp;a0=&amp;gl=0" class="grid-link grid-page grid-page-last" aria-label="Go to last page"><span>Last</span><span class="mobile-pagination" aria-hidden="true">»</span></a> | <a href="#a0=true&amp;gl=0" class="grid-link grid-show-all">All</a> </div></div>
+	
+          
+
+
+
+
+
+
+
+	<div id="NOTE_0">
+    <span class="note">
+      Notes:
+
+
+
+
+
+
+
+
+		</span>
+	</div>
+
+          <div class="note legend-notes" style="display:table">
+            <div>
+              <div class="note-icon"><img class="pdf-link" alt="" src="https://www.elegislation.gov.hk/images/icon/pdf_verified.gif"></div>
+              <div>Verified PDF [with legal status]</div>
+            </div>
+            <div>
+              <div class="note-icon"><img class="pdf-link" alt="" src="https://www.elegislation.gov.hk/images/icon/pdf.gif"></div>
+              <div>Assisted PDF [with no legal status]</div>
+            </div>
+            
+            <div>
+              <div class="note-icon"><img class="rtf-link" alt="" src="https://www.elegislation.gov.hk/images/icon/rtf.gif"></div>
+              <div>RTF (Rich Text Format) [with no legal status]</div>
+            </div>
+            
+          </div>
+        	</div>
+</div>
+
+          <input type="hidden" name="QS_CAP_NO" class="{&quot;datatype&quot;:&quot;String&quot;,&quot;label&quot;:&quot;Chapter Number or Chapter Title&quot;,&quot;autoFormat&quot;:{&quot;datatype&quot;:&quot;String&quot;}}" value="">
+  <input type="hidden" name="QS_PAGE" class="{&quot;datatype&quot;:&quot;String&quot;,&quot;autoFormat&quot;:{&quot;datatype&quot;:&quot;String&quot;}}" value="">
+  <input type="hidden" name="SHOW_OTHERS" class="{&quot;datatype&quot;:&quot;String&quot;,&quot;autoFormat&quot;:{&quot;datatype&quot;:&quot;String&quot;}}" value="">
+
+        
+        <input type="hidden" name="START_ENTRIES" value="null">
+      </form>
+
+      </div>
+</div>
+    
+  </div>
+
+  <a id="backtotop" href="javascript:void(0);" style="display:none;" title="Back to Top">
+  <span></span>
+</a>
+<ul class="accordion" data-accordion="" id="FooterAccordion">
+  <li class="accordion-navigation">
+    <a href="#SiteNavigation" class="no-visit" aria-expanded="false">Site Navigation</a>
+    <div id="SiteNavigation" class="content">
+      <div class="site-links">
+            <ul class="divided-list left">
+                                    <li class="first footer-left" id="TERMS_OF_USE">
+                      <a class="no-visit" href="https://www.elegislation.gov.hk/terms"><span>Terms of Use</span></a>
+          </li>
+                                                      <li id="COPYRIGHT_NOTICE" class="footer-left">
+                      <a class="no-visit" href="https://www.elegislation.gov.hk/copyright"><span>Copyright Policy</span></a>
+          </li>
+                                                      <li id="PRIVACY_POLICY" class="footer-left">
+                      <a class="no-visit" href="https://www.elegislation.gov.hk/privacy"><span>Privacy Policy</span></a>
+          </li>
+                                                      <li class="last footer-left" id="USEFUL_SITES">
+                      <a class="no-visit" href="https://www.elegislation.gov.hk/sites"><span>Reference Sites</span></a>
+          </li>
+                                  
+                                    <li id="ABOUT_US" class="footer-right">
+                      <a class="no-visit" href="https://www.elegislation.gov.hk/aboutus"><span>About Us</span></a>
+          </li>
+                                                      <li id="FAQ" class="footer-right">
+                      <a class="no-visit" href="https://www.elegislation.gov.hk/faq"><span>FAQ</span></a>
+          </li>
+                                                      <li id="CONTACT_US" class="footer-right">
+                      <a class="no-visit" href="https://www.elegislation.gov.hk/contactus"><span>Contact Us</span></a>
+          </li>
+                                                      <li class="last footer-right" id="SITE_MAP">
+                      <a class="no-visit" href="https://www.elegislation.gov.hk/sitemap"><span>Site Map</span></a>
+          </li>
+                                </ul>
+            
+      <div style="clear:both;"></div>
+      <div style="text-align: center;padding-top: 13px;" class="desktop-version-link"><a class="no-visit" href="#">Desktop Version</a></div>
+      </div>
+      
+    </div>
+  </li>
+</ul>
+<div id="WCAGLogo">
+<a target="_blank" href="https://www.w3.org/WAI/WCAG2AA-Conformance">
+  <img src="https://www.elegislation.gov.hk/images/wcag2AA.png" alt="Explanation of WCAG 2.0 Level Double-A Conformance" title="Explanation of WCAG 2.0 Level Double-A Conformance">
+</a>
+</div>
+  <!-- GROUP STYLES -->
+  <script type="text/javascript">
+  var lateCss  = document.createElement("link");
+  lateCss.rel  = "stylesheet";
+  lateCss.type = "text/css";
+  lateCss.href = "/css/css.incl?HASH=304680be7d688a66c2f3a2b053171d9b4e704ced0513b519889e05ec702b1a7bdf32bfddf9e40a2c2a0d28ce85d4879943f3897d12abab0a33fe56df0c61bdf3&lastMod=1663660410000&minify=true&type=css&_os=3";
+  lateCss.media= "all";
+  document.getElementsByTagName("head")[0].appendChild(lateCss);
+</script>
+    <!-- LATE SCRIPTS -->
+  <script type="text/javascript" src="/js/messages.js?lang=en&amp;hash=dfd80458117b5d9c20fa3db6aab679a8&amp;lastMod=1764906404000"></script>
+    <script type="text/javascript" src="/js.incl?HASH=befb150f658e33ca64ac45154d5ace97830e0f40b3728a8856b91108d2e9a48501e5f56b566dc1a4d9810dba6df62748366e0959eeaa1c61cbf7d4f52ebb3fc5&amp;lastMod=1764651406000&amp;minify=true&amp;type=js&amp;_os=3"></script>
+  <script type="text/javascript" src="/js.incl?HASH=e597a530e0a3f3faa976372d302a68117f64d4189016693dbbb55af83a14805871923f6963e7643ab151632498c1fccd39bbe6b996cda895d2510b65d0531267&amp;lastMod=1667037464000&amp;minify=true&amp;type=js&amp;_os=3"></script>
+    <!-- LATE SCRIPTS WITHOUT SRC -->
+<script type="text/javascript">
+   var LocaleMessages = {"BLOCKUI_PLEASE_WAIT":"Please wait..."}; if(LocaleMessages.BLOCKUI_PLEASE_WAIT) $.blockUI.defaults.message = '<div style="vertical-align:middle"><img alt="Loading Indicator" src="https://www.elegislation.gov.hk/images/indicator.gif"/>'+LocaleMessages.BLOCKUI_PLEASE_WAIT+'</div>'
+
+</script>
+<script type="text/javascript">jQuery(document).ready(function(){
+	<!--INIT SCRIPT -->
+	
+
+
+
+
+  var options;  
+  
+      options = qsCapTitleACOpts;
+    
+  options.extraParams = jQuery.extend(options.extraParams, {
+  												LOOKUP_ID:"hk.gov.doj.hkel.lookup.lrt.QuickSearchChapterTitleLookup",
+  												ID:"hk.gov.doj.hkel.lookup.lrt.QuickSearchChapterTitleLookup",
+		                      _CSRF_TOKEN:document.forms[0]._CSRF_TOKEN.value,
+		                      _LSID: "hk.gov.doj.hkel.lookup.lrt.QuickSearchChapterTitleLookup",
+		                      _ACSID: "hk.gov.doj.hkel.lookup.lrt.QuickSearchChapterTitleLookup"
+                      	});
+                      
+  options.mode =  "filter";
+  // options.resultColumn = "VALUE";
+  $("[id='QSCapNo']")
+  	.autocomplete(options)
+  	.result(function(event, data){
+  	    var result;
+  	    if(data)
+  	      result = data.CODE || data.result || "";
+  	    else
+  	      result = "";
+    		$(this).prev("input[type=hidden]").val(result);
+		});
+
+
+
+
+
+
+
+
+
+
+
+	$("form:eq(0) #CAP_NO_FR_0, form:eq(0) #CAP_NO_TO_0").groupValidator("groupStringRange");
+
+
+
+
+$(document).on("keydown", function(e) {
+
+if(e.which == 13) {
+
+var $focused = $(":focus"); 
+if ($focused && $focused.length == 0) {
+  $focused = $(document.activeElement);
+}
+
+if($focused.is(":button,a,textarea,div,span"))
+  return;
+
+if($focused.is("input") && $focused.next(".date-clear-btn").length > 0)
+  return;
+
+if($focused.is(".ac_input") && $focused.data("com.azeus.autocompleter").select.visible())
+  return;
+
+var selector = "div.group-col"; 
+if(selector && !$focused.parents(selector).length)
+  return;
+  
+
+
+  $("#BTN_SEARCH").trigger("click");
+
+}
+
+});
+
+			var req = new QuickGrid("https://www.elegislation.gov.hk/grid", "CHAPTER_NO_INDEX_GRID", document.proj_form);
+		req.textControls = {
+		  next: "Next Page",
+		  prev: "Previous Page",
+		  first: "First",
+		  last: "Last",
+		  goToPage: "<label class='grid-go-to-page'><span class='hide-in-mobile grid-goto-label'>Go To Page: </span><input type='number' pattern='\\d*' max='9999' min='0' class='grid-go-to-page-input' title='Go To Page' name='GO_TO_PAGE' placeholder='Go To'/></label>",
+		  all: "All",
+		  pageLbl: "Go to page {0}",
+		  pageWordLbl: "Go to {0} page",
+		  firstLbl: "first",
+		  prevLbl: "previous",
+		  nextLbl: "next",
+		  lastLbl: "last"
+		};
+	
+req.loadQueryParams = function() {this.addParam("CAP_NO_FR","CAP_NO_FR",false);this.addParam("CAP_NO_TO","CAP_NO_TO",false);this.addParam("TYPE","TYPE",false);this.addParam("TITLE","TITLE",false);this.addParam("GROUPING","GROUPING",false);this.addParam("STATUS","STATUS",false);this.addParam("LANGUAGE","E",true);};
+			req.loadQueryParams();
+		GRIDS.registerGrid("CHAPTER_NO_INDEX_GRID", req, {
+              onload : gotoTag,
+              showAll: true
+            });
+		req.initParams = function() {
+							  					this.grid.pageSize = "20";
+	  				  	  					this.grid.queryId = "CHAPTER_NO_INDEX_GRID_QRY";
+	  				  	  					this.grid.screenId = "ECRS0105";
+	  				  	  					this.grid.gridBd = "hk.gov.doj.hkel.grid.ecr.LCRS1005GridBd";
+	  				  	  					this.grid.functionId = "ECRS01";
+	  				  	  					this.grid.pageNo = "1";
+	  				  	  					this.grid.gsId = "CHAPTER_NO_INDEX_GRID";
+	  				  	  					this.grid.groupColumn = "";
+	  				  	  					this.grid.sortColumn = "";
+	  				  	  					this.grid.gridIndex = "0";
+	  				  	  					this.grid.checkBoxKey = "";
+	  				  	  					this.grid.sortOrder = "";
+	  				  	  					this.grid.namespace = "hk.gov.doj.hkel.bd.ecr.ECRS0105Bd";
+	  				  	  					this.grid.checkBoxKeyFormat = "";
+	  				  	  					this.grid.gridId = "CHAPTER_NO_INDEX_GRID";
+	  				  	  					this.grid.pkFields = "";
+	  				  		  		  this.processGridCols("columns:[\"CAP_NO\",\"TITLE\",\"PDF_RTF\",\"PDF_RTF\",\"PDF_RTF\"], labels: [\"Chapter / Instrument No.\",\"Chapter / Instrument Title\",\"Bilingual\",\"English\",\"Chinese\"], columnWidths: [\"15%\", \"*\", \"10%\", \"10%\", \"10%\"], controls: [\"generateCapNo\",\"generateTitle\",\"generatePDFB\",\"generatePDFE\",\"generatePDFC\"], sortable: [false, false, false, false, false], alignment: [\"left\", \"left\", \"center\", \"center\", \"center\"]")
+		  		  		};
+			  	GridUtils.loadGrid("CHAPTER_NO_INDEX_GRID", false);
+	  	
+checkModifiedOnLeave = false;
+FontSizeManager.init({"default":{"hash":["f55064a36ee49a2d6369a1ee621094843e06d98f4e6ba0e2c805e52fd86dea3e467ff0100e9ddc4b7cea475956b2a3ad2920e9fa1223f8c4c844a2f866a46962","304680be7d688a66c2f3a2b053171d9b4e704ced0513b519889e05ec702b1a7bdf32bfddf9e40a2c2a0d28ce85d4879943f3897d12abab0a33fe56df0c61bdf3"]}});
+
+
+  <!--ACTION SCRIPT -->
+	  function RESET(e){
+      
+              //doReset(null, false);
+              $(e.target.form || document.forms[0]).clearForm();
+              $("input[name=TYPE]").prop("checked", true);
+            
+  }
+  window.RESET = RESET;
+  function getGroupingList (e){
+    var tagBody = {
+              success: function(result) {
+                         if(result && result.length > 0) {
+                           reloadGroupingList(result);
+                         } else {
+                           removeGroupingList();
+                         }
+                       },
+              params: { CAP_NO_FR : document.forms[0].CAP_NO_FR.value,
+                        CAP_NO_TO : document.forms[0].CAP_NO_TO.value,
+                        TYPE : getType(),
+                        TITLE : document.forms[0].TITLE.value,
+                        STATUS : document.forms[0].STATUS.value,
+                        LANGUAGE: "E",
+                        SHOW_RTF_DOWNLOAD:"Y"}
+            },
+        formData = {"QID":"QRY_CAP_NO_INDEX", "AQSID_QRY_CAP_NO_INDEX_":"QRY_CAP_NO_INDEX"},
+        params;
+    if (tagBody.validate && !$(document.forms[0]).validate()) {
+      return;
+    }
+    
+    if (tagBody.before && $.isFunction(tagBody.before)) {
+      tagBody.before();
+    }
+    
+    if (!!tagBody.params) {
+      $.extend(formData, tagBody.params);
+      delete tagBody.params;
+    } else {
+      if (!!this.form) {
+        $.extend(formData, $(this.form).serializeObject());
+      }
+    }
+    if ((!!tagBody.performOnExit)||(!!tagBody.completed)) {
+      var err = tagBody.error, cmp = tagBody.performOnExit, suc = tagBody.completed;
+      function newError(jqXHR) {
+        if ($.isFunction(err)) {
+          err({error: jqXHR.responseText});
+        }
+        if($.isFunction(cmp)) {
+          cmp();
+        }
+      }
+      function newSuccess(data) {
+        if ($.isFunction(suc)) {
+          suc(data);
+        }
+        if($.isFunction(cmp)) {
+          cmp();
+        }
+      }
+      delete tagBody.performOnExit;
+      delete tagBody.completed;
+      delete tagBody.error;
+      $.extend(tagBody, {success: newSuccess, error: newError});
+    }
+    params = $.extend({url: 'https://www.elegislation.gov.hk/AjaxQuery', dataType: "json", type: "post", data: formData}, tagBody);
+    if (params.error == null) {      
+      params.error = function(data, error) {
+        if (error == "error" && data && data.status == 403) {
+          if(ApplicationProperties.CONTEXT_ROOT)
+            window.top.location = "/" + ApplicationProperties.CONTEXT_ROOT + "/error";
+          else
+            window.top.location = "/error";
+        }
+      };
+    }
+    $.ajax(params);
+  }
+  window.getGroupingList = getGroupingList;
+  function SEARCH(e){
+      
+              var $form = $(e.target.form || document.forms[0]);
+              if ($form.validate()) {
+                GridUtils.reloadGrid(GRIDS[0].grid.gridId, true);
+                getGroupingList();
+              }
+            
+  }
+  window.SEARCH = SEARCH;
+
+	
+	<!--EVENT HANDLING SCRIPT -->
+	$('#BTN_CLEAR').click(function(e){
+  if(e.isDefaultPrevented())
+    return;
+    hideAppMessage();
+    RESET(e);  
+})
+;
+$('#BTN_SEARCH').click(function(e){
+  if(e.isDefaultPrevented())
+    return;
+    hideAppMessage();
+    SEARCH(e);  
+})
+;
+
+});</script>
+
+
+  <script type="text/javascript">
+  var engStatusLookup = {"22":"Spent","23":"Proposed","27":"Superseded","28":"Other","29":"Rearranged","30":"Ceased to apply","10":"Expired","11":"Had its effect","12":"Not adopted as the Laws of the HKSAR","13":"Omitted","14":"Omitted as expired","15":"Omitted as spent","16":"Omitted as withdrawn","17":"Repealed","18":"Repealed but retained","19":"Replaced","1":"In effect","100":"Withdrawn","101":"Amendments Incorporated","3":"Partially in operation","4":"Partially suspended","5":"Suspended","6":"Not yet in operation","7":"Cancelled","8":"Ceased to be in force","9":"Ceased to have effect","20":"Rescinded","21":"Revoked"};
+  var chiStatusLookup = {"22":"已失時效","23":"提議","27":"已被取代","28":"其他","29":"已重編","30":"終止適用","10":"已期滿失效","11":"已失效力","12":"不採用為香港特別行政區法律","13":"已略去","14":"已期滿失效而略去","15":"已失時效而略去","16":"已撤回而略去","17":"已廢除","18":"已廢除但保留","19":"已取代","1":"有效","100":"已撤回","101":"已將修訂編入","3":"部分實施","4":"部分暫時中止實施","5":"暫時中止實施","6":"尚未實施","7":"已取消","8":"已失效","9":"停止有效","20":"已刪除","21":"已撤銷"};
+  var legTypeSmall = "(e.g. Basic Law, NPCSC's interpretations and other constitutional instruments)";
+  var pdfEncodeUserAgent = '.*(Android).*(Chrome).*';
+  $("[id='TYPE_group_2_LBL']").append("<small>"+window.legTypeSmall+"</small>");
+  
+  $(document).ready(function() {
+    setTimeout("getGroupingList();", 0);
+    GridUtils.reloadGrid(GRIDS[0].grid.gridId, false);
+    
+    setValidations(); // for string range tag validation
+    
+    if (window.location.pathname.indexOf("/others") > -1) {
+      var $links = $("#PRC_NOTE").find("a");
+      $links.each(function(i, link) {
+        var $link = $(link);
+        var href = $link.attr("href");
+        if ($link && href && href.indexOf("../") == 0) {
+          $link.attr("href", "../" + href);
+        }
+      });
+    }
+  });
+  
+  /**
+   * Get checked types on screen for searching
+   */
+  function getType() {
+    var res = '';
+    for (var i = 0; i < $('input[name=TYPE]:checked').length; i++) {
+      res += $('input[name=TYPE]:checked')[i].value;
+    }
+    return res;
+  }
+  
+  /**
+   * Move screen to tag of Chapter for use with Quick Search 
+   */
+  var capTag = "";
+  function gotoTag() {
+	  if (capTag) {
+		  if ($("a[id=tag" + capTag + "]").length > 0) {
+			  window.location.href = "#tag" + capTag;
+		  } else {
+			  alert(formatMessage(LBJSWarningMsgs["QS_CAP_NO_NOT_FOUND"], [capTag]));
+		  }
+		  
+	  }	  
+	  capTag = "";
+	  
+	  if ("Y" == $("input[name=START_ENTRIES]").val()) {
+      $("input[name=START_ENTRIES]").val("");
+      setTimeout(function() {
+        $("#CHAPTER_NO_INDEX_GRID").closest("div.panel").get(0).scrollIntoView(true);
+      }, 300);
+    }
+	  
+	  if ($(this.targetElement).find(".has-refdoc-link").length > 0) {
+	    $("#PRC_NOTE").show();
+	  } else {
+	    $("#PRC_NOTE").hide();
+	  }
+	  
+	  
+	  if ($(this.targetElement).find(".has-instr").length > 0) {
+	    $("#QUICKLINK_NOTE").show();
+	  } else {
+	    $("#QUICKLINK_NOTE").hide();
+	  }
+	  
+  }
+  
+  /**
+   * Refresh grid based on grouping selected and page number 
+   */
+  function reloadGrid (grouping, tag, page) {
+    //document.forms[0].GROUPING.value = grouping;
+    if (tag) {                  
+      if (page) {
+    	  capTag = tag;
+      } else {
+    	  alert(formatMessage(LBJSWarningMsgs["QS_CAP_NO_NOT_FOUND"], [tag]));
+      }
+    }
+    
+    setGrouping(grouping);
+    if (page) {
+    	GridUtils.pageGrid('CHAPTER_NO_INDEX_GRID', page);
+    } else {
+    	GridUtils.refreshGrid(GRIDS[0].grid.gridId, true);
+    }    
+    if (grouping == '' || grouping == null)
+      highlightSelectedButton('all');
+    else 
+      highlightSelectedButton(grouping);   
+  }
+  
+  /**
+   * Remove grouping links 
+   */
+  function removeGroupingList() {
+    $("#groupSelect").html("");
+  }
+  
+  /**
+   * Refresh grouping links based on search criteria 
+   */
+  function reloadGroupingList(result) {
+    removeGroupingList();
+    var $groupSelect = $("#groupSelect");
+    var showLabel = "Show";
+    $("<span class=\"isweb-label\">").text(showLabel + ": ").appendTo($groupSelect);
+    $("<a>").attr({
+      href: "javascript:reloadGrid('');",
+      id: "all"
+    }).addClass("group-selector").text("All")
+    .appendTo($groupSelect);
+    
+    var hasOthers = false;
+    for(var i in result){
+      var group = result[i];
+      $("<a>").attr({
+        href : "javascript:reloadGrid('"+group.GROUPING+"');",
+        id : group.GROUPING
+      }).addClass("group-selector").text(group.GROUPING == "O" ? "Others" : group.GROUPING)
+      .appendTo($groupSelect);
+      if (group.GROUPING == "O") {
+        hasOthers = true;
+      }
+    }
+    
+    highlightSelectedButton("all");
+    if ($("input[name=QS_CAP_NO]").val()) {
+    	var qscap = $("input[name=QS_CAP_NO]").val();
+    	$("input[name=QS_CAP_NO]").val('');
+    	
+    	var qspage = $("input[name=QS_PAGE]").val();    	
+    	$("input[name=QS_PAGE]").val('');
+    	reloadGrid('', qscap, qspage);    	
+    } else if ("Y" == $("input[name=SHOW_OTHERS]").val() && hasOthers) {
+      reloadGrid('O');
+    }
+  }
+
+  /**
+   * Change color of selected grouping 
+   */
+  function highlightSelectedButton(grouping) {
+    var $groupSelect = $("#groupSelect");
+    $groupSelect.children("a.selected").each(function() {
+      $(this).removeClass("selected");
+    });
+    $groupSelect.children("a[id=" + grouping + "]").addClass("selected");
+  }
+  
+  /**
+   * Generate Chapter URL for display with Chapter Number 
+   */
+  function generateCapNo(cellData, row, col, rs){
+    var capNo = cleanData(rs.get("CAP_NO_DISPLAY"));
+    var pencilMarkId = cleanData(rs.get("PENCIL_MARK_ID"));
+    var tabs = "0";
+    if(rs.get("TYPE") == 2)
+      tabs = "20";
+    
+    if(pencilMarkId){
+      if(rs.get("PUBLISH_DATE_LAPSED") == "Y"){
+    	  var tooltip = 'With amendments yet to be incorporated';
+        return '<a id="tag' + capNo + '"></a><div style="padding-left:' + tabs + 'px;">' + 
+          capNo + '<a href="#" onClick=\"event.preventDefault();openPendingUpdates('+
+          pencilMarkId +', event)\" class=\"pencil-mark\"><img title=\"' + tooltip + '\" alt=\"' + tooltip + '\" src=\"' + 
+          Utils.resolve("/images/pencil.png") + '\"/></a></div>';
+      }
+    }    
+    
+    var refDocLinkInd = "";
+    
+    if ("Y" == rs.get("HAS_REFDOC_LINK")) {
+      refDocLinkInd = "<span class='has-refdoc-link'></span>";
+    }
+    
+    var qlNoteInd  = "";
+    
+    if ("3" == rs.get("TYPE")) {
+      qlNoteInd = "<span class='has-instr'></span>";
+    }
+    
+    
+    return '<a id="tag' + capNo + '"></a><div style="padding-left:' + tabs + 'px;">' + capNo + '</div>' + refDocLinkInd + qlNoteInd;
+  }
+
+      function generateTitle(cellData, row, col, rs) {
+        var link = rs.get("URL");
+        var status = rs.get("STATUS");
+        var pencilMarkInd = rs.get("PENCIL_MARK_IND");
+        var tabs = "0";
+        
+        var content = cleanData(rs.get("ENG_TITLE"));
+        
+        
+        if(rs.get("TYPE") == 2)
+          tabs = "20";
+        
+        if(!link)
+        	return '<div style="padding-left:' + tabs + 'px;">' + content + '</div>'  
+        else
+          link = link.indexOf("/") == 0 ? Utils.resolve(link) : Utils.resolve("/" + link);
+        
+        // Move logic to query
+        //if(status == 5 || status == 17 || status == 18){
+          //content = cleanData(rs.get("ENG_TITLE")) + ' (' + engStatusLookup[status] + ')<br/>'
+          //+ cleanData(rs.get("CHI_TITLE")) + ' (' + chiStatusLookup[status] + ')';
+        //} else {
+          //content = cleanData(rs.get("ENG_TITLE")) + '<br/>' + cleanData(rs.get("CHI_TITLE"));
+        //}
+
+        if(pencilMarkInd == 'N') {
+          return '<a href="' + 
+            link + '" class=\"hklm_ref\" target=\"LRTS01\" style="padding-left:' + tabs + 'px; display: block;">' + content + '</a>';
+        }
+          
+        
+        return '<div style="padding-left:' + tabs + 'px;">' + content + '</div>'
+      }
+
+      // Cleans string input
+      function cleanData(str) {
+        return (str) ? escapeHtml(str) : "";
+      }
+      
+      /**
+       * Sets grouping variables based on selected grouping link  
+       */
+      function setGrouping(letter) {
+        var params = GRIDS[0].grid.queryParams;
+        var noGroupingParam = true;
+        for(var i = 0; i < params.length; i++){
+          if(params[i].indexOf("GROUPING=") == 0){
+            noGroupingParam = false;
+            params[i] = "GROUPING=" + letter;
+          }
+        }
+        
+        if(noGroupingParam){
+          params.push("GROUPING=" + letter);
+        }
+        
+      }
+      
+      /**
+       * Returns false if Cap No 2 is less than Cap No 1 
+       */
+      function compare(capNo1, capNo2) {
+        
+        if(!capNo1 || !capNo2) return true;
+        if(capNo1 == capNo2) return true;
+        
+        var i, j, clean1 = capNo1.toUpperCase().replace(/[^A-Z0-9-]/g, ""),
+            clean2 = capNo2.toUpperCase().replace(/[^A-Z0-9-]/g, ""),
+            total1 = clean1.length, total2 = clean2.length, chr1, chr2;
+        var reg = /^([\d]+)/;
+        for (i = 0, j = 0; (i< total1 && j< total2); i++, j++) {
+          chr1 = clean1[i];
+          chr2 = clean2[j];
+          if ((isNaN(chr1) && isNaN(chr2)) && chr1 != chr2) {
+            return chr1 < chr2;
+          } else if (!isNaN(chr1) && !isNaN(chr2)) {    
+            var num1 = reg.exec(clean1.substr(i))[0];
+            var num2 = reg.exec(clean2.substr(j))[0];
+            
+            i = i + num1.length - 1;
+            j = j + num2.length - 1;
+            if(num1 != num2){
+              return Number(num1) < Number(num2);
+            }
+          } else if (!isNaN(chr1) && isNaN(chr2)) {
+            return true;
+          } else if (isNaN(chr1) && !isNaN(chr2)) {
+            return false;
+          }
+        }
+        
+        return total1 < total2;
+      }
+
+      /**
+       * Initialize validation for Cap No search fields     
+       */
+      function setValidations() {
+        $("form:eq(0) #CAP_NO_FR_0, form:eq(0) #CAP_NO_TO_0").removeValidator("groupStringRange");
+        $("form:eq(0) #CAP_NO_FR_0, form:eq(0) #CAP_NO_TO_0").groupValidator(function capRange($elements, params){
+          var element = $elements[0], nextElement = $elements[1];
+          return compare(element.value, nextElement.value);
+        }, "", LBJSErrorMsgs[100008]);
+      }
+      
+      /**
+       * Open Pencil Mark dialog window 
+       */
+      function openPendingUpdates(pencilMarkId, event) {
+        var $target = $(event.target);
+        if ($target.is("img")) {
+          $target = $target.parent();
+        }
+        $.dialog({
+          src: Utils.resolve("/amendments") + "?PENCIL_MARK_ID=" + pencilMarkId + 
+        		   "&LANGUAGE=E",
+          onClose: function() {
+            setTimeout(function() {
+              $target.focus();
+            }, 200);
+          }
+        }).modal();
+      }
+      
+      /**
+       * Open Table of Contents dialog window 
+       */
+      function openTOC(legVersionId, link, event) {
+        var param = "?LEG_VERSION_ID=" + legVersionId;
+        $.dialog({
+          src: Utils.resolve("/jsp/ecr/ecrs0105a.jsp"),          
+          params: {
+            LEG_VERSION_ID: legVersionId,
+            CAP_LINK: link
+          },
+          minWidth: 800,
+          onClose: function() {
+            setTimeout(function() {
+              $(event.target).focus();
+            }, 200);
+          }
+        }).modal();
+      }
+      
+      /**
+       * Generate PDF Icon for Bilingual
+       */
+      function generatePDFB(cellData, row, col, rs){
+        return generatePDF(cellData, row, col, rs, 'B');
+      }
+      
+      /**
+       * Generate PDF Icon for English
+       */
+      function generatePDFE(cellData, row, col, rs){
+        return generatePDF(cellData, row, col, rs, 'E');
+      }
+      
+      /**
+       * Generate PDF Icon for Chinese
+       */
+      function generatePDFC(cellData, row, col, rs){
+        return generatePDF(cellData, row, col, rs, 'C');
+      }
+           
+      /**
+       * Generate PDF Icons
+       */
+      function generatePDF(cellData, row, col, rs, lang) {   
+        var noDownloadContent = "<div class='no-download'>\u2014</div>";
+        if (cellData == "Y") {
+          //Pencil Mark
+          return noDownloadContent;
+        }   
+        
+        if (cellData == "X") {
+          // No PDF or RTF, redirect to BLIS
+          return noDownloadContent;
+        }        
+        
+        var isNoLongerInEffect = rs.get("CATEGORY") == "N";
+        // Create link to PDF / RTF  
+        var alt;
+        var pdfCheck = "";
+        var rtfCheck = "";
+        var pdfIcon = Utils.resolve('/images/icon/pdf.gif');
+        var pdfLink = ".assist.pdf";
+        var rtfIcon = Utils.resolve('/images/icon/rtf.gif');
+        var rtfLink = ".assist.rtf";
+        
+        var capURL = rs.get("URL");
+        if (capURL) {
+          if (lang == 'B') {
+            if (cellData.indexOf("ABT") > -1) {
+              pdfCheck = "BT";
+            } else {
+                      
+              if (cellData.indexOf("BT") > -1) {
+                pdfCheck = "BT";
+              }        
+              
+            }
+            
+                    
+            if (cellData.indexOf("RBET") > -1) {
+              rtfCheck = "RBET";
+            }        
+            
+            
+            capURL = capURL + '!en-zh-Hant-HK';
+            alt = 'Bilingual';
+          } else if (lang == 'E') {        
+            if (cellData.indexOf("EN") > -1) {
+              pdfCheck = "EN";
+            }       
+            
+            if (cellData.indexOf("RE") > -1 && !isNoLongerInEffect) {
+              rtfCheck = "RE";
+            }     
+            
+            capURL = capURL + '!en';
+            alt = 'English';
+          } else {
+            if (cellData.indexOf("ATC") > -1) {
+              pdfCheck = "TC";
+            } else {          
+              
+              if (cellData.indexOf("TC") > -1) {
+                pdfCheck = "TC";
+              }
+                      
+            }
+            
+            
+            if (cellData.indexOf("RT") > -1 && !isNoLongerInEffect) {
+              rtfCheck = "RT";
+            }
+            
+            
+            
+            capURL = capURL + '!zh-Hant-HK';
+            alt = 'Chinese';
+          }
+          
+          if (cellData.indexOf("A" + pdfCheck) > -1) {
+            alt = 'Download Verified PDF (with legal status)';
+            pdfIcon = Utils.resolve('/images/icon/pdf_verified.gif');
+            pdfLink = ".pdf";
+          } else {
+            alt = 'Download Assisted PDF (with no legal status)';
+            pdfIcon = Utils.resolve('/images/icon/pdf.gif');
+            pdfLink = ".assist.pdf";
+            
+          }
+          
+          
+          
+          capURL = encodeVirtualUrl(capURL);
+          
+          capURL = capURL.indexOf("/") == 0 ? Utils.resolve(capURL) : Utils.resolve("/" + capURL);          
+        }
+        
+        var hasPDF = pdfCheck != "";
+        var hasRTF = rtfCheck != "";
+        
+        if (!hasRTF && !hasPDF) {
+          return noDownloadContent;
+        }               
+        
+        var pdfURL = capURL + pdfLink;
+        var pdfIconTag = '<img src="' + pdfIcon + 
+        '" class="pdf-link" alt="' + alt + '" title="' + alt + '"/>';
+        var pdfTag = "";
+        
+        if (hasPDF) {
+          pdfTag = '<a href="' + pdfURL + '" onClick="openPDF(\'' + pdfURL + 
+            '?FROMCAPINDEX=Y\'); return false;">' + pdfIconTag + '</a>';
+        } else {
+          pdfTag = '<span class="hide-icon">' + pdfIconTag + '</span>';
+        }
+        
+        var rtfDownloadTag = "";
+        
+        
+        alt = 'Download RTF (with no legal status)';
+        
+        var rtfURL = capURL + rtfLink;
+        var rtfIconTag = '<img src="' + rtfIcon + 
+        '" class="rtf-link" alt="' + alt + '" title="' + alt + '"/>';
+        var rtfTag = "";
+        
+        if (hasRTF) {
+          
+          rtfTag = '<a href="' + rtfURL + '?FROMCAPINDEX=Y">' + rtfIconTag + '</a>';
+        } else {
+          rtfTag = '<span class="hide-icon">' + rtfIconTag + '</span>';
+        }
+        rtfDownloadTag = '<div>' + rtfTag + '</div>';
+        
+        
+        return '<div class="download-icons"><div><div>' + pdfTag + '</div>' + rtfDownloadTag + '</div></div>';
+      }
+      
+      GridUtils.showProgressDialog = function() {
+        $("#gridPanel").block();
+      }
+
+      GridUtils.hideProgressDialog = function() {
+        $("#gridPanel").unblock();
+      }
+      
+      NavHandler.setValidParams(["CAP_NO_FR", "CAP_NO_TO", "TITLE", "STATUS", "TYPE", "LANGUAGE", "QS_CAP_NO", "QS_PAGE", "START_ENTRIES"]);
+    </script>
+      </div>
+	  </div>
+	</div>
+
+
+
+
+</body></html>

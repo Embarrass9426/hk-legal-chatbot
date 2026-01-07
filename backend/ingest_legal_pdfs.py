@@ -4,7 +4,7 @@ from vector_store import VectorStoreManager
 import os
 
 async def ingest_cap282():
-    print("Starting ingestion for Cap 282 (Employees' Compensation Ordinance)...")
+    print("Starting ingestion for legal pdfs...")
     
     # 1. Parse PDF
     parser = PDFLegalParser("282")
