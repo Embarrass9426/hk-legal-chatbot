@@ -6,5 +6,21 @@ __pycache__/
 .env.local
 .vscode/
 dist/
-# Ignore all downloaded PDFs
+.cache/
+
+# Ignore all downloaded PDFs and parsed data
 backend/data/pdfs/
+backend/data/parsed/
+*.pyc
+.unstructured_cache/
+
+# Artifacts and Debugging
+*.pdf
+*.png
+*.html
+*.xml
+debug_*
+index_*
+
+# Local bins
+backend/bin/

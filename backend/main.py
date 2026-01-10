@@ -52,17 +52,36 @@ async def generate_chat_responses(message: str, language: str = "en"):
         analysis = await utils.extract_keywords(message, llm)
         print(f"Analysis: {analysis}")
 
-        # 2. Retrieval from Vector Store
-        # We search for relevant sections in our ingested database
-        context_docs = vector_manager.search(message, k=5)
-        context_text = "\n\n".join([doc.page_content for doc in context_docs])
+        # 2. Retrieval from Vector Store - Pure Similarity Search (Top-5)
+        search_results = vector_manager.search(message, k=5)
         
-        # Prepare references for the frontend
+        # Prepare context text and references
+        context_parts = []
         references = []
-        for i, doc in enumerate(context_docs):
-            ref = doc.metadata
-            ref["id"] = f"ref-{i}"
-            references.append(ref)
+        
+        for i, doc in enumerate(search_results):
+            content = doc.page_content
+            # Strip retrieval prefix if present
+            prefix = "Represent this legal document passage for retrieval: "
+            if content.startswith(prefix):
+                content = content[len(prefix):]
+                
+            metadata = doc.metadata
+            sec_title = metadata.get("section_title", "Unknown Section")
+            citation = metadata.get("citation", f"Section {metadata.get('section_id', 'Unknown')}")
+            
+            context_parts.append(f"### Reference [{i+1}]: {sec_title}\n{content}")
+            
+            references.append({
+                "id": f"ref-{i}",
+                "title": citation,
+                "source_url": metadata.get("source_url", ""),
+                "page": metadata.get("page_number", ""),
+                "jurisdiction": "Hong Kong",
+                "type": "Ordinance"
+            })
+
+        context_text = "\n\n".join(context_parts)
 
         # 3. Build Augmented Prompt
         system_content = """You are an expert Hong Kong legal assistant specializing in the Employees' Compensation Ordinance (Cap. 282).

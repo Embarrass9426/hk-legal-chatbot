@@ -98,7 +98,6 @@
 - **Backend**: Metadata in Pinecone now includes granular page-level information.
 - **Next Steps**: 
     - Implement a PDF viewer directly in the app (optional).
-
 ---
 *Log updated on 2026-01-01*
 
@@ -187,8 +186,10 @@
 - **Memory Management**: Researching sliding window and summarization techniques to maintain conversation context within token limits.
 - **Implementation Pause**: Paused the batch downloader and ingestor to ensure the RAG architecture is optimized before processing 3,000+ documents.
 
+---
+*Log updated on 2026-01-04*
 
-##  January 7, 2026
+## 📅 January 7, 2026
 
 ###  Completed Tasks
 - **Model Research**: Identified `Yuan-embedding-2.0-en` for embeddings and `Qwen3-Reranker-8B` for reranking.
@@ -225,7 +226,88 @@
 - **Data Ingestion**: 3,145 HK Ordinances PDF download tasks queued.
 - **Next Steps**: 
     - Monitor and verify the completion of the PDF downloading process.
-    - Proceed with the ingestion of downloaded PDFs using the intelligent parsing pipeline.
+    - Proceed with the ingestion of downloaded PDFs using the `unstructured` library.
 
 ---
 *Log updated on 2026-01-08*
+
+## 📅 January 8, 2026 (Evening)
+
+### ✅ Completed Tasks
+- **Pivot to Unstructured Library**:
+    - Decided to move away from LLM-based PDF parsing for section mapping.
+    - Adopted the **Unstructured** Python library as the primary engine for PDF content extraction.
+    - This change aims for higher accuracy in identifying structural elements (Titles, Tables, List Items) without the latency and cost of LLM calls.
+- **Updated Project Plan**:
+    - Reflected the shift to `unstructured` in Phase 3 of the [PROJECT_PLAN.md](PROJECT_PLAN.md).
+    - Removed previous LLM-driven TOC mapping logic from the planned roadmap.
+
+### 🛠️ Current Status
+- **Parsing Strategy**: Unified around `unstructured` for all PDF ordinances.
+- **Next Steps**: 
+    - Install `unstructured` and its dependencies (libmagic, poppler, etc.).
+    - Update `backend/pdf_parser.py` to use `unstructured.partition.pdf`.
+    - Implement element-to-section grouping logic.
+
+*Log updated on 2026-01-08*
+
+## 📅 January 9, 2026
+
+### ✅ Completed Tasks
+- **OCR & Dependency Fixes**:
+    - Resolved "Tesseract not found" by explicitly adding `C:\Program Files\Tesseract-OCR` to the runtime environment `PATH` in `pdf_parser_v2.py`.
+    - Integrated logic to handle local **Poppler** binary paths within the project structure for Windows portability.
+- **Robust Path Resolution**:
+    - Updated `ingest_legal_pdfs.py` to automatically detect PDF directories across both local and root execution contexts.
+    - Added support for `--cap` command-line argument for targeted processing of specific ordinances.
+- **Database Stability**:
+    - Fixed a critical Pinecone error (`Invalid value for id`) by implementing ID truncation for exceptionally long section titles in `vector_store.py`.
+    - Suppressed `max_size` deprecation warnings from nested library calls to maintain clean logs during batch ingestion in `pdf_parser_v2.py`.
+- **Optimization**:
+    - Explicitly disabled the 8B Reranker while preserving the section-expansion retrieval logic to improve performance and reduce VRAM bottlenecks.
+- **Automated Data Maintenance**:
+    - Implemented `delete_by_doc_id` in `VectorStoreManager` to clear old segments before re-indexing.
+    - Updated ingestion pipeline to automatically purge existing vectors for a specific ordinance before uploading new ones, preventing "ghost chunks" when chunking logic changes.
+- **GPU Acceleration Fix**:
+    - Resolved "not using GPU" issue by identifying and removing the CPU-only `onnxruntime` conflicts.
+    - Forced re-installation of `onnxruntime-gpu`.
+    - Implemented `os.add_dll_directory` logic in `pdf_parser_v2.py` to point explicitly to `torch\lib` and `nvidia` CUDA DLLs, ensuring `CUDAExecutionProvider` is detected by ONNX Runtime on Windows.
+
+### 🛠️ Current Status
+- **Ingestion**: Working reliably for ordinances with long titles (e.g., Cap A1).
+- **Environment**: Backend fully configured with Tesseract, Poppler, and the necessary Python venv.
+
+### 📅 Next Steps
+- [ ] Run full ingestion for all Employment and Workers' Compensation related ordinances.
+- [ ] Verify retrieval quality using the `search_with_expansion` method.
+
+---
+*Log updated on 2026-01-09*
+
+## 📅 January 10, 2026
+
+### ✅ Completed Tasks
+- **Infrastructure & GPU Acceleration**:
+    - **GPU Provider Fixed**: Successfully enabled `CUDAExecutionProvider` and `TensorrtExecutionProvider` in `onnxruntime` by resolving library conflicts and configuring Windows DLL paths.
+    - **OCR Stack Upgrade**: Replaced Tesseract with **PaddleOCR (GPU)** and **PaddlePaddle-GPU** (nightly cu129) for significantly faster and higher-fidelity text extraction.
+    - **Layout Analysis**: Switched to **YOLOX** as the primary layout model for legal document architectural detection.
+- **Parser & Ingestion Optimization**:
+    - **Advanced Parallelization**: Updated `pdf_parser_v2.py` to use `multiprocess=True` with 8 physical cores.
+    - **Dynamic Batching**: Implemented `layout_batch_size` parameter in `partition_pdf` to maximize VRAM utilization on the RTX 4060 Ti.
+    - **Benchmarking Suite**: Developed `backend/optimize_ingestion.py` to automate performance testing.
+    - **Triple-Parameter Sweep**: Instrumented the ingestion pipeline to benchmark **Concurrency** (3-10), **Embedding Batch** (16, 32, 64), and **Layout Batch** (4, 8, 16) combinations.
+- **Dependency Consolidation**:
+    - Updated `backend/requirements.txt` with production-grade GPU libraries: `onnxruntime-gpu`, `tensorrt`, `paddlepaddle-gpu`, `paddleocr`, and `yolox`.
+
+### 🛠️ Current Status
+- **Environment**: High-performance GPU ingestion environment is fully stabilized.
+- **Performance**: The system is now optimized for the high-throughput ingestion of the 3,000+ ordinance corpus.
+
+### 📅 Next Steps
+- [ ] Record and implement the "Best Parameters" found by the optimization script.
+- [ ] Kick off the full batch ingestion for the remaining 3,000+ Ordinances.
+- [ ] Implement **Recall@K** evaluation script to benchmark retrieval accuracy after the full corpus is ingested.
+
+---
+*Log updated on 2026-01-10*
+

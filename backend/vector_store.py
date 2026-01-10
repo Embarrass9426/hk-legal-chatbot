@@ -1,7 +1,10 @@
 import os
+from typing import List, Dict, Any
 from pinecone import Pinecone, ServerlessSpec
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, BitsAndBytesConfig
+import torch
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,14 +20,21 @@ class VectorStoreManager:
 
         self.pc = Pinecone(api_key=self.api_key)
         
-        # Initialize embeddings
-        self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        # Initialize embeddings with Yuan-embedding-2.0-en
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="IEITYuan/Yuan-embedding-2.0-en",
+            model_kwargs={'device': 'cuda', 'trust_remote_code': True} 
+        )
+        
+        # Initialize Reranker (Qwen3-Reranker-8B) - DISABLED FOR NOW
+        self.reranker_model = None
+        self.reranker_tokenizer = None
         
         # Create index if it doesn't exist
         if self.index_name not in self.pc.list_indexes().names():
             self.pc.create_index(
                 name=self.index_name,
-                dimension=384, # Dimension for all-MiniLM-L6-v2
+                dimension=1024, # Dimension for Yuan-embedding-2.0-en
                 metric='cosine',
                 spec=ServerlessSpec(
                     cloud='aws',
@@ -38,50 +48,139 @@ class VectorStoreManager:
             pinecone_api_key=self.api_key
         )
 
-    def upsert_documents(self, documents):
+    def upsert_chunks(self, chunks: List[Dict[str, Any]]):
         """
-        Upserts a list of document dictionaries into Pinecone.
-        Splits large documents into smaller chunks to avoid Pinecone metadata limits.
+        Upserts pre-chunked legal data with specific metadata.
         """
         if not self.api_key:
             return
             
-        from langchain_text_splitters import RecursiveCharacterTextSplitter
+        # Apply asymmetric prefix to chunks
+        prefix = "Represent this legal document passage for retrieval: "
+        texts = [prefix + c['content'] for c in chunks]
+        metadatas = []
+        ids = []
         
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=2000,
-            chunk_overlap=200
-        )
+        for c in chunks:
+            # Metadata as per instruction
+            meta = {
+                "doc_id": c["doc_id"],
+                "section_id": c["section_id"],
+                "section_title": c["section_title"],
+                "page_number": c["page_number"],
+                "chunk_index": c["chunk_index"],
+                "total_chunks_in_section": c.get("total_chunks_in_section", 1),
+                "citation": c["citation"],
+                "source_url": c["source_url"]
+            }
+            metadatas.append(meta)
+            
+            # Construct ID and ensure it's under 512 characters
+            full_id = f"{c['doc_id']}-{c['section_id']}-{c['chunk_index']}"
+            if len(full_id) > 500:
+                # Truncate section_id part if too long
+                truncated_section = c['section_id'][:400]
+                full_id = f"{c['doc_id']}-{truncated_section}-{c['chunk_index']}"
+            ids.append(full_id)
         
-        all_texts = []
-        all_metadatas = []
-        all_ids = []
-        
-        for doc in documents:
-            chunks = text_splitter.split_text(doc['content'])
-            for i, chunk in enumerate(chunks):
-                all_texts.append(chunk)
-                # Create a unique ID for each chunk
-                all_ids.append(f"{doc['id']}-chunk-{i}")
-                # Copy metadata and add chunk info
-                meta = {k: v for k, v in doc.items() if k != 'content'}
-                meta['chunk'] = i
-                all_metadatas.append(meta)
-        
-        # Upsert in batches to be safe
+        # Upsert in batches
         batch_size = 100
-        for i in range(0, len(all_texts), batch_size):
+        for i in range(0, len(texts), batch_size):
             self.vector_store.add_texts(
-                texts=all_texts[i:i + batch_size], 
-                metadatas=all_metadatas[i:i + batch_size], 
-                ids=all_ids[i:i + batch_size]
+                texts=texts[i:i + batch_size], 
+                metadatas=metadatas[i:i + batch_size], 
+                ids=ids[i:i + batch_size]
             )
 
-    def search(self, query: str, k: int = 5):
+    def search_with_expansion(self, query: str, k: int = 5):
         """
-        Searches the vector store for relevant documents.
+        Retrieves top-10 chunks, reranks to top-5, then expands to full section context.
         """
         if not self.api_key:
             return []
             
-        return self.vector_store.similarity_search(query, k=k)
+        # 1. Similarity search for top-k chunks
+        # Apply asymmetric prefix if required by Yuan embedding
+        query_with_prefix = f"Represent this question for retrieving relevant legal documents: {query}"
+        # We fetch top-k directly since reranking is disabled
+        initial_results = self.vector_store.similarity_search(query_with_prefix, k=k)
+        
+        # 2. Reranking (DISABLED FOR NOW) - Using similarity results directly
+        reranked_results = initial_results
+        
+        # 3. Identify unique sections from retrieved chunks to expand logic
+        sections_to_fetch = set()
+        for doc in reranked_results:
+            doc_id = doc.metadata.get("doc_id")
+            section_id = doc.metadata.get("section_id")
+            if doc_id and section_id:
+                sections_to_fetch.add((doc_id, section_id))
+        
+        # 4. Fetch all siblings for each identified section
+        expanded_context = []
+        index = self.pc.Index(self.index_name)
+        
+        for doc_id, section_id in sections_to_fetch:
+            # Query Pinecone by metadata filter to get all chunks in section
+            query_filter = {
+                "doc_id": {"$eq": doc_id},
+                "section_id": {"$eq": section_id}
+            }
+            
+            section_results = index.query(
+                vector=[0]*1024, # Dummy vector for metadata-only filtering
+                filter=query_filter,
+                top_k=100, 
+                include_metadata=True,
+                include_values=False
+            )
+            
+            # Extract and sort by chunk_index
+            section_chunks = []
+            for match in section_results['matches']:
+                section_chunks.append({
+                    "content": match['metadata'].get('text', ''), 
+                    "metadata": match['metadata']
+                })
+            
+            # Sort by chunk_index
+            section_chunks.sort(key=lambda x: x['metadata'].get('chunk_index', 0))
+            
+            expanded_context.append({
+                "section_id": section_id,
+                "doc_id": doc_id,
+                "chunks": section_chunks
+            })
+            
+        return expanded_context
+
+    def search(self, query: str, k: int = 5):
+        """
+        Pure embedding similarity search (Top-k) without reranking or expansion.
+        """
+        if not self.api_key:
+            return []
+            
+        # Apply asymmetric prefix for retrieval query
+        query_with_prefix = f"Represent this question for retrieving relevant legal documents: {query}"
+        
+        # Similarity search for top-k chunks
+        return self.vector_store.similarity_search(query_with_prefix, k=k)
+
+    def _rerank(self, query: str, documents: List[Any], top_k: int = 5):
+        """Internal reranking logic using Cross-Encoder model."""
+        if not self.reranker_model or not documents:
+            return documents[:top_k]
+            
+        pairs = [[query, doc.page_content] for doc in documents]
+        
+        # Get the device the model is on
+        device = next(self.reranker_model.parameters()).device
+        
+        with torch.no_grad():
+            inputs = self.reranker_tokenizer(pairs, padding=True, truncation=True, return_tensors='pt', max_length=512).to(device)
+            scores = self.reranker_model(**inputs).logits.view(-1,).float()
+            
+        # Pair scores with documents and sort
+        scored_docs = sorted(zip(scores, documents), key=lambda x: x[0], reverse=True)
+        return [doc for score, doc in scored_docs[:top_k]]
