@@ -36,7 +36,7 @@ async def run_optimization():
                 start_time = time.time()
                 try:
                     # Run the ingestion pipeline
-                    await ingest_legal_pdfs(cap_numbers=test_caps, batch_size=cb, embedding_batch_size=eb, model=model, layout_batch_size=lb)
+                    await ingest_legal_pdfs(cap_numbers=test_caps, batch_size=cb, embedding_batch_size=eb, model=model, layout_batch_size=lb, force_reprocess=True)
                     duration = time.time() - start_time
                     
                     print(f"\n[RESULT] Time for CB={cb}, EB={eb}, LB={lb}: {duration:.2f} seconds")

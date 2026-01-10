@@ -10,12 +10,20 @@ from pdf_parser_v2 import PDFLegalParserV2
 from vector_store import VectorStoreManager
 from sentence_transformers import SentenceTransformer
 
-async def process_single_cap(cap_num, pdf_dir, semaphore, index, model, processed_counter, embedding_batch_size=16, layout_batch_size=8):
+async def process_single_cap(cap_num, pdf_dir, semaphore, index, model, processed_counter, embedding_batch_size=16, layout_batch_size=8, force_reprocess=False):
     """Processes a single ordinance cap with batch embedding and enriched metadata."""
     async with semaphore:
         try:
-            print(f"\n--- Starting Cap {cap_num} ---")
             parser = PDFLegalParserV2(cap_num, pdf_dir=pdf_dir)
+            json_path = os.path.join(parser.output_dir, f"cap{cap_num}.json")
+            
+            # Skip if JSON already exists (parsing and embedding)
+            if not force_reprocess and os.path.exists(json_path):
+                processed_counter["count"] += 1
+                print(f"--- Skipping Cap {cap_num} (JSON found) | Progress: {processed_counter['count']}/{processed_counter['total']} ---")
+                return
+
+            print(f"\n--- Starting Cap {cap_num} ---")
 
             # 1. Parse PDF (Heavy CPU/GPU task)
             chunks = await asyncio.to_thread(parser.process_ordinance, layout_batch_size=layout_batch_size)
@@ -77,7 +85,7 @@ async def process_single_cap(cap_num, pdf_dir, semaphore, index, model, processe
         except Exception as e:
             print(f"Error processing Cap {cap_num}: {e}")
 
-async def ingest_legal_pdfs(cap_numbers=None, batch_size=3, embedding_batch_size=16, model=None, layout_batch_size=8):
+async def ingest_legal_pdfs(cap_numbers=None, batch_size=3, embedding_batch_size=16, model=None, layout_batch_size=8, force_reprocess=False):
     """
     Ingests specified Cap numbers or all available PDFs in data/pdfs.
     Processes in batches concurrently.
@@ -128,7 +136,7 @@ async def ingest_legal_pdfs(cap_numbers=None, batch_size=3, embedding_batch_size
     semaphore = asyncio.Semaphore(batch_size)
     
     # Create all tasks
-    tasks = [process_single_cap(cap, pdf_dir, semaphore, index, model, processed_counter, embedding_batch_size, layout_batch_size) for cap in cap_numbers]
+    tasks = [process_single_cap(cap, pdf_dir, semaphore, index, model, processed_counter, embedding_batch_size, layout_batch_size, force_reprocess) for cap in cap_numbers]
     
     # Run them!
     await asyncio.gather(*tasks)
@@ -145,6 +153,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch", type=int, default=3, help="Number of files to process in parallel (default: 3)")
     parser.add_argument("--embedding_batch", type=int, default=16, help="Batch size for embedding model (default: 16)")
     parser.add_argument("--layout_batch", type=int, default=8, help="Batch size for layout model (default: 8)")
+    parser.add_argument("--force", action="store_true", help="Force reprocessing even if JSON exists")
     args = parser.parse_args()
     
-    asyncio.run(ingest_legal_pdfs(cap_numbers=args.cap, batch_size=args.batch, embedding_batch_size=args.embedding_batch, layout_batch_size=args.layout_batch))
+    asyncio.run(ingest_legal_pdfs(cap_numbers=args.cap, batch_size=args.batch, embedding_batch_size=args.embedding_batch, layout_batch_size=args.layout_batch, force_reprocess=args.force))

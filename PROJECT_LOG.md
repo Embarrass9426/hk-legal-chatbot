@@ -293,6 +293,7 @@
     - **Layout Analysis**: Switched to **YOLOX** as the primary layout model for legal document architectural detection.
 - **Parser & Ingestion Optimization**:
     - **Advanced Parallelization**: Updated `pdf_parser_v2.py` to use `multiprocess=True` with 8 physical cores.
+    - **Smart Skip Logic**: Implemented check for existing JSON files in `ingest_legal_pdfs.py` to skip processing and embedding for already parsed documents, with a `--force` override for re-indexing.
     - **Dynamic Batching**: Implemented `layout_batch_size` parameter in `partition_pdf` to maximize VRAM utilization on the RTX 4060 Ti.
     - **Benchmarking Suite**: Developed `backend/optimize_ingestion.py` to automate performance testing.
     - **Triple-Parameter Sweep**: Instrumented the ingestion pipeline to benchmark **Concurrency** (3-10), **Embedding Batch** (16, 32, 64), and **Layout Batch** (4, 8, 16) combinations.
