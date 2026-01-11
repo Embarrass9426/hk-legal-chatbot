@@ -312,3 +312,41 @@
 ---
 *Log updated on 2026-01-10*
 
+## 📅 January 11, 2026
+
+### 🛠️ Current Status Update
+- **Infrastructure**: All core parsing and ingestion infrastructure is now complete and ready for production use.
+- **Cap Discovery**: Successfully identified and indexed all **3,145 HK Ordinances** from e-Legislation.
+- **Optimization Tooling**: Developed `optimize_ingestion.py` to benchmark different combinations of concurrency, embedding batch sizes, and layout batch sizes for optimal throughput.
+- **RAG Architecture**: 
+  - Implemented Yuan-embedding-2.0-en for embeddings with asymmetric prompting
+  - Integrated Qwen3-Reranker-8B (currently disabled for performance optimization)
+  - Query rewriting functionality implemented in `utils.py`
+  - Section-based chunking with metadata-linked retrieval ready
+  - Full section expansion logic implemented in vector store
+- **GPU Stack**: Full CUDA/TensorRT acceleration configured with PaddleOCR and YOLOX for high-performance document processing.
+- **Batch Downloader**: Robust PDF downloader with retry logic and concurrency controls ready to fetch all 3,145 ordinances.
+
+### 📊 Project Status Summary
+- **Backend**: Fully implemented and ready for large-scale ingestion
+- **Frontend**: Complete with language toggle, reference cards, and streaming chat interface
+- **Data Pipeline**: Ready but not yet executed - awaiting optimization benchmarking results
+- **Vector Database**: Pinecone index configured and ready for bulk ingestion
+
+### 📅 Next Steps
+- [ ] Run `optimize_ingestion.py` to determine optimal parameters for the full corpus ingestion
+- [ ] Execute batch PDF download for all 3,145 ordinances using `batch_download.py`
+- [ ] Begin full corpus ingestion using optimized parameters
+- [ ] Develop Recall@K and MRR evaluation metrics and golden dataset
+- [ ] Enable Qwen3-Reranker-8B after confirming base retrieval performance
+- [ ] Implement multi-turn conversation memory with context window management
+- [ ] Expand to Case Law ingestion from HKLII
+
+### 💡 Key Decisions Made
+- Prioritized infrastructure completion and optimization over immediate data ingestion to ensure scalability
+- Temporarily disabled reranker to establish baseline performance metrics
+- Chose to benchmark parameters scientifically before processing 3,000+ documents
+
+---
+*Log updated on 2026-01-11*
+
