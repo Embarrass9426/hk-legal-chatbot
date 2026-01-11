@@ -137,9 +137,8 @@ The system must strictly follow standard Hong Kong legal citation styles:
     - [x] **New OCR Stack**: Replaced Tesseract with **PaddleOCR** and **YOLOX** for faster, layout-aware parsing.
     - [x] **Auto-Tuning**: Developed `optimize_ingestion.py` to benchmark concurrency and batching parameters.
 - [ ] **Execute Optimization Benchmark**: Run `optimize_ingestion.py` to determine best parameters for production ingestion.
-- [ ] **Execute Full Corpus Download**: Download all 3,145 ordinances using optimized parameters.
-- [ ] **Batch Ingestor**: Script to iterate through `backend/data/parsed/*.json` and upsert to Pinecone.
-- [ ] **Vector Database Migration**: Scale Pinecone index to handle the full corpus of HK Ordinances.
+- [ ] **Vector Database Production Ingestion**: Upsert all parsed ordinances from `backend/data/parsed/*.json` to Pinecone using optimized parameters.
+- [ ] **Scale Vector Database**: Monitor and scale Pinecone index to handle the full corpus of HK Ordinances efficiently.
 - [ ] Implement caching for scraped/parsed content to reduce latency.
 - [ ] Expand data ingestion to include Case Law from HKLII.
 - [ ] Implement an in-app PDF viewer for seamless reference checking.
