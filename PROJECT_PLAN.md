@@ -96,7 +96,7 @@ The system must strictly follow standard Hong Kong legal citation styles:
 
 ### Phase 3: Data Ingestion & PDF Parsing (e-Legislation)
 - [x] Download **Employees' Compensation Ordinance (Cap. 282)** PDF (Initial Test Case).
-- [ ] **Cap Discovery**: Scrape e-Legislation index to generate a sorted list of all valid Cap numbers (e.g., 1, 207, 207A).
+- [x] **Cap Discovery**: Scrape e-Legislation index to generate a sorted list of all valid Cap numbers (e.g., 1, 207, 207A).
 - [x] **Batch Downloader**: Implement a robust downloader with retry logic to fetch all identified PDFs.
 - [x] **Unstructured PDF Parser**:
     - [x] **Element Identification**: Use `unstructured` library to partition PDFs into narrative text, titles, and list items.
@@ -108,8 +108,10 @@ The system must strictly follow standard Hong Kong legal citation styles:
         - Store with schema: `doc_id`, `section_id`, `section_title`, `chunk_index`, `total_chunks_in_section`.
         - Ensure every chunk has a direct URL with physical page anchors (`#page=N`).
 - [x] **Storage**: Save each parsed Ordinance as an individual `cap{num}.json` file in `backend/data/parsed/`.
+- [ ] **Execute Full Corpus Download**: Download all 3,145 identified ordinances using `batch_download.py`.
+- [ ] **Execute Full Corpus Parsing**: Parse all downloaded PDFs using `pdf_parser_v2.py` with optimized parameters.
 
-### Phase 4: RAG Implementation & Refinement (Current Focus)
+### Phase 4: RAG Implementation & Refinement (Completed Infrastructure)
 - [x] **Model Selection**: Selected `Yuan-embedding-2.0-en` and `Qwen3-Reranker-8B` for high-precision legal retrieval.
 - [x] **Asymmetric Retrieval Pipeline**:
     - [x] Implement **Query Rewriting** to focus on legal concepts using LLM.
@@ -120,20 +122,24 @@ The system must strictly follow standard Hong Kong legal citation styles:
 - [x] **Context Expansion logic**:
     - [x] Retrieve Top 10 -> Deduplicate -> Rerank Top 5 using `Qwen3-Reranker-8B` (Q4).
     - [x] For each Top 5 chunk, fetch **all sibling chunks** from the same `section_id` to provide complete legal context to DeepSeek.
+    - [x] Note: Reranking currently disabled for performance baseline testing.
 - [ ] **Retrieval Evaluation**:
     - [ ] Develop evaluation script using **Recall@K** and **MRR** (Mean Reciprocal Rank) metrics.
     - [ ] Create a golden dataset of query-section pairs for benchmarking.
+    - [ ] Run evaluation after full corpus ingestion to establish baseline metrics.
 - [ ] **Multi-turn Conversation & Memory**:
     - [ ] Implement a **Conversation Buffer** with context window management (sliding window or summarization).
 
-### Phase 5: Production Scaling
+### Phase 5: Production Scaling (Infrastructure Ready, Execution Pending)
 - [x] **Batch Downloader**: Implement a robust downloader with retry logic to fetch all 3,145 identified PDFs.
-- [ ] **Batch Ingestor**: Script to iterate through `backend/data/parsed/*.json` and upsert to Pinecone.
-- [ ] **Vector Database Migration**: Scale Pinecone index to handle the full corpus of HK Ordinances.
 - [x] **OCR & Performance Optimization**:
     - [x] **GPU Acceleration**: Enabled CUDA/TensorRT for ONNX.
     - [x] **New OCR Stack**: Replaced Tesseract with **PaddleOCR** and **YOLOX** for faster, layout-aware parsing.
     - [x] **Auto-Tuning**: Developed `optimize_ingestion.py` to benchmark concurrency and batching parameters.
+- [ ] **Execute Optimization Benchmark**: Run `optimize_ingestion.py` to determine best parameters for production ingestion.
+- [ ] **Execute Full Corpus Download**: Download all 3,145 ordinances using optimized parameters.
+- [ ] **Batch Ingestor**: Script to iterate through `backend/data/parsed/*.json` and upsert to Pinecone.
+- [ ] **Vector Database Migration**: Scale Pinecone index to handle the full corpus of HK Ordinances.
 - [ ] Implement caching for scraped/parsed content to reduce latency.
 - [ ] Expand data ingestion to include Case Law from HKLII.
 - [ ] Implement an in-app PDF viewer for seamless reference checking.
