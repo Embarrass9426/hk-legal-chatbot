@@ -1,13 +1,80 @@
 import os
+import site
 from typing import List, Dict, Any
 from pinecone import Pinecone, ServerlessSpec
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, BitsAndBytesConfig
+from optimum.onnxruntime import ORTModelForFeatureExtraction
 import torch
+import torch.nn.functional as F
 from dotenv import load_dotenv
 
+# Fix for missing TensorRT DLLs (nvinfer_10.dll)
+try:
+    import tensorrt as trt
+    trt_path = os.path.join(os.path.dirname(trt.__file__), "..", "tensorrt_libs")
+    if os.path.exists(trt_path):
+        os.environ["PATH"] = trt_path + os.pathsep + os.environ["PATH"]
+        if hasattr(os, "add_dll_directory"):
+            os.add_dll_directory(trt_path)
+except Exception:
+    try:
+        import site
+        site_packages = site.getsitepackages()[0]
+        trt_path = os.path.join(site_packages, "tensorrt_libs")
+        if os.path.exists(trt_path):
+            os.environ["PATH"] = trt_path + os.pathsep + os.environ["PATH"]
+            if hasattr(os, "add_dll_directory"):
+                os.add_dll_directory(trt_path)
+    except Exception:
+        pass
+
 load_dotenv()
+
+class BoostedYuanEmbeddings:
+    """Custom LangChain compatible embedding class using ONNX/TensorRT."""
+    def __init__(self, model_path: str):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path, fix_mistral_regex=True)
+        self.model = ORTModelForFeatureExtraction.from_pretrained(
+            model_path,
+            provider="TensorrtExecutionProvider",
+            provider_options={
+                "device_id": 0,
+                "trt_fp16_enable": True,
+                "trt_engine_cache_enable": True,
+                "trt_engine_cache_path": model_path
+            }
+        )
+        self.device = "cpu"
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return self._embed(texts)
+
+    def embed_query(self, text: str) -> List[float]:
+        return self._embed([text])[0]
+
+    def _embed(self, texts: List[str]) -> List[List[float]]:
+        # Yuan embedding typically expects a prefix for better performance
+        # but handled here by the caller if needed.
+        inputs = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt").to(self.device)
+        
+        # Generate position_ids if required by the ORT model
+        if "position_ids" not in inputs:
+            batch_size, seq_len = inputs["input_ids"].shape
+            inputs["position_ids"] = torch.arange(seq_len, device=self.device).unsqueeze(0).expand(batch_size, -1)
+
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            # Yuan-embedding-2.0-en uses the CLS token (index 0) for embeddings
+            if hasattr(outputs, "last_hidden_state"):
+                embeddings = outputs.last_hidden_state[:, 0, :]
+            else:
+                # Fallback for dictionary/tuple output
+                embeddings = outputs[0][:, 0, :]
+                
+            embeddings = F.normalize(embeddings, p=2, dim=1)
+            return embeddings.cpu().numpy().tolist()
 
 class VectorStoreManager:
     def __init__(self):
@@ -20,11 +87,17 @@ class VectorStoreManager:
 
         self.pc = Pinecone(api_key=self.api_key)
         
-        # Initialize embeddings with Yuan-embedding-2.0-en
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="IEITYuan/Yuan-embedding-2.0-en",
-            model_kwargs={'device': 'cuda', 'trust_remote_code': True} 
-        )
+        # Initialize Boosted Embeddings with Yuan-embedding-2.0-en
+        model_path = r"C:\Users\Embarrass\Desktop\vscode\hk-legal-chatbot\backend\models\yuan-onnx-trt"
+        if os.path.exists(os.path.join(model_path, "model.onnx")):
+            print("Using Boosted Yuan Embeddings (ONNX/TensorRT)")
+            self.embeddings = BoostedYuanEmbeddings(model_path)
+        else:
+            print("Warning: Boosted model not found. Using standard HuggingFaceEmbeddings.")
+            self.embeddings = HuggingFaceEmbeddings(
+                model_name="IEITYuan/Yuan-embedding-2.0-en",
+                model_kwargs={'device': 'cuda', 'trust_remote_code': True} 
+            )
         
         # Initialize Reranker (Qwen3-Reranker-8B) - DISABLED FOR NOW
         self.reranker_model = None

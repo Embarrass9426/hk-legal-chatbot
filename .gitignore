@@ -21,6 +21,7 @@ backend/data/parsed/
 *.xml
 debug_*
 index_*
+backend/models/
 
 # Local bins
 backend/bin/

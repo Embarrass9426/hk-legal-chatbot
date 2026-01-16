@@ -3,63 +3,85 @@ import re
 import json
 import warnings
 import sys
+import site
 from typing import List, Dict, Any
+from pathlib import Path
 
 # Suppress specific deprecation warnings
 warnings.filterwarnings("ignore", message=".*max_size parameter is deprecated.*")
 
-def setup_environment():
-    """Sets up PATH and DLL directories for GPU, Poppler, and Tesseract."""
-    current_file_dir = os.path.dirname(os.path.abspath(__file__))
-    root_dir = os.path.abspath(os.path.join(current_file_dir, ".."))
-    venv_site_packages = os.path.join(root_dir, ".venv", "Lib", "site-packages")
-    
-    # 1. Poppler setup
-    poppler_path = os.path.join(current_file_dir, "bin", "poppler", "poppler-24.08.0", "Library", "bin")
-    if not os.path.exists(poppler_path):
-        poppler_path = os.path.join(root_dir, "backend", "bin", "poppler", "poppler-24.08.0", "Library", "bin")
-    
-    if os.path.exists(poppler_path):
-        os.environ["PATH"] = poppler_path + os.pathsep + os.environ["PATH"]
-        print(f"Added Poppler to PATH: {poppler_path}")
-
-    # 3. GPU/CUDA/TensorRT DLL setup (Windows specific)
-    if os.path.exists(venv_site_packages):
-        gpu_dll_dirs = [
-            os.path.join(venv_site_packages, "torch", "lib"),
-            os.path.join(venv_site_packages, "nvidia", "cu13", "bin", "x86_64"),
-            os.path.join(venv_site_packages, "nvidia", "cuda_runtime", "bin"),
-            os.path.join(venv_site_packages, "tensorrt_libs")
-        ]
-        for dll_dir in gpu_dll_dirs:
-            if os.path.exists(dll_dir):
-                try:
-                    os.add_dll_directory(os.path.abspath(dll_dir))
-                    os.environ["PATH"] = dll_dir + os.pathsep + os.environ["PATH"]
-                    print(f"Added DLL directory: {dll_dir}")
-                except Exception as e:
-                    print(f"Note: Could not add_dll_directory for {dll_dir}: {e}")
-
-# Initialize environment before importing torch/unstructured
-setup_environment()
-
+import torch
+import numpy as np
+import torch.nn.functional as F
+from transformers import AutoTokenizer, AutoModel
+from optimum.onnxruntime import ORTModelForFeatureExtraction
 from unstructured.partition.pdf import partition_pdf
 from unstructured.staging.base import elements_to_json
-from transformers import AutoTokenizer
-import torch
+
+# Fix for missing TensorRT DLLs (nvinfer_10.dll)
+try:
+    import tensorrt as trt
+    trt_path = os.path.join(os.path.dirname(trt.__file__), "..", "tensorrt_libs")
+    if os.path.exists(trt_path):
+        os.environ["PATH"] = trt_path + os.pathsep + os.environ["PATH"]
+        if hasattr(os, "add_dll_directory"):
+            os.add_dll_directory(trt_path)
+except Exception:
+    try:
+        site_packages = site.getsitepackages()[0]
+        trt_path = os.path.join(site_packages, "tensorrt_libs")
+        if os.path.exists(trt_path):
+            os.environ["PATH"] = trt_path + os.pathsep + os.environ["PATH"]
+            if hasattr(os, "add_dll_directory"):
+                os.add_dll_directory(trt_path)
+    except Exception:
+        pass
 
 class PDFLegalParserV2:
-    def __init__(self, cap_number: str, pdf_dir: str = "backend/data/pdfs"):
+    def __init__(self, cap_number: str, pdf_dir: str = r"C:\Users\Embarrass\Desktop\vscode\hk-legal-chatbot\backend\data\pdfs", output_dir: str = r"C:\Users\Embarrass\Desktop\vscode\hk-legal-chatbot\backend\data\parsed", model=None, tokenizer=None):
         self.cap_number = cap_number
         self.pdf_path = os.path.join(pdf_dir, f"cap{cap_number}.pdf")
         # Base URL for the PDF without query parameters for cleaner anchors
         self.base_pdf_url = f"https://www.elegislation.gov.hk/hk/cap{cap_number}!en.pdf"
         self.url = f"{self.base_pdf_url}?FROMCAPINDEX=Y"
-        self.output_dir = "backend/data/parsed"
+        self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
         
-        # Initialize tokenizer (matching Yuan embedding or generic BERT-based)
-        self.tokenizer = AutoTokenizer.from_pretrained("IEITYuan/Yuan-embedding-2.0-en", trust_remote_code=True)
+        # Initialize model and tokenizer for semantic chunking
+        model_name = "IEITYuan/Yuan-embedding-2.0-en"
+        model_path = r"C:\Users\Embarrass\Desktop\vscode\hk-legal-chatbot\backend\models\yuan-onnx-trt"
+        self.device = "cpu" # Force CPU for torch to avoid sm_120 compatibility issues on RTX 50-series
+        
+        if tokenizer:
+            self.tokenizer = tokenizer
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_path if os.path.exists(model_path) else model_name, 
+                trust_remote_code=True,
+                fix_mistral_regex=True
+            )
+            
+        if model:
+            self.model = model
+        elif os.path.exists(os.path.join(model_path, "model.onnx")):
+            self.model = ORTModelForFeatureExtraction.from_pretrained(
+                model_path,
+                provider=["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"],
+                provider_options=[
+                    {
+                        "device_id": 0,
+                        "trt_fp16_enable": True,
+                        "trt_engine_cache_enable": True,
+                        "trt_engine_cache_path": model_path
+                    },
+                    {}, # CUDA
+                    {}  # CPU
+                ]
+            )
+        else:
+            self.model = AutoModel.from_pretrained(model_name, trust_remote_code=True).to(self.device)
+            self.model.eval()
+
         
         # Elements to drop and keep
         self.DROP_TAGS = {
@@ -70,37 +92,54 @@ class PDFLegalParserV2:
             "Text", "Title", "NarrativeText", "ListItem", "Table", "Image", "UncategorizedText"
         }
 
+    def _get_embeddings(self, texts: List[str]):
+        """Helper to get semantic embeddings for a list of strings using CLS pooling."""
+        with torch.no_grad():
+            inputs = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt").to(self.device)
+            
+            # Generate position_ids if required by the ORT model
+            if "position_ids" not in inputs:
+                batch_size, seq_len = inputs["input_ids"].shape
+                inputs["position_ids"] = torch.arange(seq_len, device=self.device).unsqueeze(0).expand(batch_size, -1)
+            
+            # Use CPU for tensors when calling ORT if device is CPU
+            # Convert to numpy for ORT if using direct InferenceSession, 
+            # but ORTModelForFeatureExtraction handles torch tensors if they are on the right device.
+            outputs = self.model(**inputs)
+            
+            # Use CLS pooling for Yuan-embedding (Index 0)
+            # Check the output type - ORTModelForFeatureExtraction usually returns a ModelOutput
+            if hasattr(outputs, "last_hidden_state"):
+                embeddings = outputs.last_hidden_state[:, 0, :]
+            else:
+                # Handle tuple/dict output from ORT
+                # Some versions/configs return a tuple where index 0 is the hidden states
+                # Let's be safer and check if it's a tensor first
+                hidden_states = outputs[0] if isinstance(outputs, (list, tuple)) else outputs["last_hidden_state"]
+                embeddings = hidden_states[:, 0, :]
+                
+            return F.normalize(embeddings, p=2, dim=1)
+
+    def _count_tokens(self, text: str):
+        """Counts tokens using the class tokenizer."""
+        return len(self.tokenizer.encode(text, add_special_tokens=False))
+
     def parse_pdf(self, layout_batch_size=8):
-        """Partitions PDF into elements using Unstructured."""
+        """Partitions PDF into elements using Unstructured 'fast' strategy."""
         if not os.path.exists(self.pdf_path):
             raise FileNotFoundError(f"PDF local path not found: {self.pdf_path}")
 
-        # Verify GPU Availability
-        cuda_available = torch.cuda.is_available()
-        print(f"CUDA Available: {cuda_available}")
-        if cuda_available:
-            print(f"Using GPU: {torch.cuda.get_device_name(0)}")
-
-        # Optimize for GPU and speed
-        # Using yolox model and PaddleOCR for better compatibility/speed
+        print(f"Parsing Cap {self.cap_number} with 'fast' strategy...")
         elements = partition_pdf(
             filename=self.pdf_path,
-            strategy="hi_res",
+            strategy="fast",
             include_page_breaks=False,
-            infer_table_structure=True,
-            chunking_strategy=None,
             languages=["eng"],
-            pdf_image_dpi=200,
-            model_name="yolox",
-            model_device="cuda" if cuda_available else "cpu",
-            multiprocess=True,
-            num_processes=8,
-            layout_batch_size=layout_batch_size,
-            ocr_languages=["eng"],
-            pdf_extract_images=False,
-            extract_image_block_output_dir=None,
+            infer_table_structure=True,
+            layout_batch_size=layout_batch_size
         )
         return elements
+
 
     def is_title(self, el):
         """Robust check if element is a section title."""
@@ -123,7 +162,10 @@ class PDFLegalParserV2:
             return True
         
         return False
-
+    
+    # First initialize sections
+    # Then group elements into sections based on titles
+    # Finally return list of sections with their elements
     def group_by_sections(self, elements):
         """Groups elements into sections using logic boundaries."""
         sections = []
@@ -158,7 +200,8 @@ class PDFLegalParserV2:
             sections.append(current_section)
         
         return sections
-
+    
+    # To record page boundaries by mapping char offsets to page numbers while linearizing
     def normalize_section_content(self, elements):
         """Linearizes section elements into a single text block and tracks page boundaries."""
         full_text = ""
@@ -175,8 +218,9 @@ class PDFLegalParserV2:
             # Map the start of this element's text to its page number
             page_mappings.append((current_char_idx, page_num))
             
-            full_text += text + "\n"
-            current_char_idx += len(text) + 1 # +1 for the newline
+            # Join elements with double newlines to clearly separate paragraphs
+            full_text += text + "\n\n"
+            current_char_idx += len(text) + 2 # +2 for the double newline
             
         return full_text.strip(), page_mappings
 
@@ -190,56 +234,132 @@ class PDFLegalParserV2:
                 break
         return current_page
 
-    def chunk_section(self, section_data: Dict, chunk_size=300, overlap_percent=0.1):
-        """Applies sliding-window token-based chunking within a section only."""
+    def chunk_section_paragraph_based(self, section_data: Dict, chunk_size=1200, overlap_sentences=2, threshold=0.8):
+        """
+        Semantic chunking based on paragraphs. Merges paragraphs which are semantically 
+        similar until the chunk_size (upper limit) is reached.
+        """
+        # Step 1: Convert PDF section elements into a single text block
         content, page_mappings = self.normalize_section_content(section_data["elements"])
-        
+
         if not content:
             return []
 
-        # Tokenize with offsets to find where each chunk starts in the original text
-        encoding = self.tokenizer(content, add_special_tokens=False, return_offsets_mapping=True)
-        tokens = encoding["input_ids"]
-        offsets = encoding["offset_mapping"]
-        
-        overlap = int(chunk_size * overlap_percent)
-        chunks = []
+        # Step 2: Split text into paragraphs (separated by double newlines)
+        paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
 
-        start = 0
-        chunk_idx = 0
-        while start < len(tokens):
-            end = start + chunk_size
-            chunk_tokens = tokens[start:end]
-            chunk_text = self.tokenizer.decode(chunk_tokens)
-            
-            # Get the page number for the start of this chunk
-            start_char_idx = offsets[start][0]
+        if not paragraphs:
+            return []
+
+        # Step 3: Get embeddings for semantic similarity
+        paragraph_embeddings = self._get_embeddings(paragraphs)
+
+        chunks = []                # will store final chunks
+        current_paragraphs = []    # buffer of paragraphs in current chunk
+        current_tokens = 0
+        chunk_index = 0
+
+        # Trace paragraph offsets to map back to page numbers
+        paragraph_offsets = []
+        current_offset = 0
+        for p in paragraphs:
+            paragraph_offsets.append(current_offset)
+            current_offset += len(p) + 2 # +2 for the \n\n joins
+
+        for i in range(len(paragraphs)):
+            paragraph = paragraphs[i]
+            paragraph_tokens = self._count_tokens(paragraph)
+
+            # determine similarity to previous paragraph (if any)
+            if i > 0:
+                similarity = F.cosine_similarity(
+                    paragraph_embeddings[i-1].unsqueeze(0),
+                    paragraph_embeddings[i].unsqueeze(0)
+                ).item()
+            else:
+                similarity = 1.0
+
+            # merge paragraphs if semantically close and not exceeding chunk size (upper limit)
+            if similarity >= threshold and (current_tokens + paragraph_tokens) <= chunk_size:
+                current_paragraphs.append(paragraph)
+                current_tokens += paragraph_tokens
+            else:
+                # flush current chunk
+                if current_paragraphs:
+                    chunk_text = "\n\n".join(current_paragraphs)
+                    # Page mapping is based on the start of the first paragraph in the chunk
+                    first_para_idx = i - len(current_paragraphs)
+                    start_char_idx = paragraph_offsets[first_para_idx]
+                    page_number = self.get_page_for_offset(start_char_idx, page_mappings)
+
+                    chunks.append({
+                        "content": chunk_text,
+                        "page_number": page_number,
+                        "chunk_index": chunk_index,
+                        "section_id": self._slugify(section_data["section_title"]),
+                        "section_title": section_data["section_title"],
+                        "doc_id": "cap" + self.cap_number,
+                        "citation": f"Cap. {self.cap_number}, {section_data['section_title']}",
+                        "source_url": f"{self.base_pdf_url}#page={page_number}"
+                    })
+                    chunk_index += 1
+
+                # start a new chunk buffer
+                current_paragraphs = [paragraph]
+                current_tokens = paragraph_tokens
+
+        # flush last chunk
+        if current_paragraphs:
+            chunk_text = "\n\n".join(current_paragraphs)
+            first_para_idx = len(paragraphs) - len(current_paragraphs)
+            start_char_idx = paragraph_offsets[first_para_idx]
             page_number = self.get_page_for_offset(start_char_idx, page_mappings)
-            
+
             chunks.append({
-                "doc_id": f"cap{self.cap_number}",
-                "section_id": self._slugify(section_data["section_title"]),
-                "section_title": section_data["section_title"],
                 "content": chunk_text,
                 "page_number": page_number,
-                "chunk_index": chunk_idx,
+                "chunk_index": chunk_index,
+                "section_id": self._slugify(section_data["section_title"]),
+                "section_title": section_data["section_title"],
+                "doc_id": "cap" + self.cap_number,
                 "citation": f"Cap. {self.cap_number}, {section_data['section_title']}",
                 "source_url": f"{self.base_pdf_url}#page={page_number}"
             })
-            
-            chunk_idx += 1
-            if end >= len(tokens):
-                break
-            start += (chunk_size - overlap)
+
+        # Step 4: Add sentence-level overlap
+        overlapped_chunks = []
+
+        for j in range(len(chunks)):
+            current_chunk_data = chunks[j].copy()
+            current_chunk_text = current_chunk_data["content"]
+
+            # copy last N sentences from previous chunk to current
+            if j > 0 and overlap_sentences > 0:
+                prev_chunk_text = chunks[j-1]["content"]
                 
-        return chunks
+                # Split previous chunk into sentences using regex
+                prev_sentences = re.findall(r'[^.!?]+[.!?]+', prev_chunk_text)
+                if not prev_sentences:
+                    prev_sentences = [prev_chunk_text.strip()]
+                
+                overlap_text = " ".join(prev_sentences[-overlap_sentences:])
+                
+                # prepend overlap to the current chunk
+                current_chunk_text = overlap_text + " " + current_chunk_text
+            
+            # store adjusted chunk with new content
+            current_chunk_data["content"] = current_chunk_text
+            overlapped_chunks.append(current_chunk_data)
+
+        return overlapped_chunks
+
 
     def _slugify(self, text):
         # Truncate to 100 chars to avoid Pinecone ID limit issues (512 total)
         slug = re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
         return slug[:100].strip('-')
 
-    def process_ordinance(self, skip_if_exists=True, layout_batch_size=8):
+    def process_ordinance(self, skip_if_exists=True, layout_batch_size=16):
         """Full pipeline for an ordinance. Skips parsing if JSON already exists."""
         output_path = os.path.join(self.output_dir, f"cap{self.cap_number}.json")
         
@@ -254,7 +374,7 @@ class PDFLegalParserV2:
         
         all_chunks = []
         for sec in sections_elements:
-            sec_chunks = self.chunk_section(sec)
+            sec_chunks = self.chunk_section_paragraph_based(sec)
             all_chunks.extend(sec_chunks)
             
         # Add total_chunks_in_section metadata

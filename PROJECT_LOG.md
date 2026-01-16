@@ -294,6 +294,7 @@
 - **Parser & Ingestion Optimization**:
     - **Advanced Parallelization**: Updated `pdf_parser_v2.py` to use `multiprocess=True` with 8 physical cores.
     - **Smart Skip Logic**: Implemented check for existing JSON files in `ingest_legal_pdfs.py` to skip processing and embedding for already parsed documents, with a `--force` override for re-indexing.
+    - **GPU Diagnostic Logging**: Integrated PaddlePaddle GPU availability checks directly into `pdf_parser_v2.py` to ensure hardware acceleration is active before heavy OCR tasks.
     - **Dynamic Batching**: Implemented `layout_batch_size` parameter in `partition_pdf` to maximize VRAM utilization on the RTX 4060 Ti.
     - **Benchmarking Suite**: Developed `backend/optimize_ingestion.py` to automate performance testing.
     - **Triple-Parameter Sweep**: Instrumented the ingestion pipeline to benchmark **Concurrency** (3-10), **Embedding Batch** (16, 32, 64), and **Layout Batch** (4, 8, 16) combinations.
@@ -311,4 +312,32 @@
 
 ---
 *Log updated on 2026-01-10*
+
+## 📅 January 17, 2026
+
+### ✅ Completed Tasks
+- **Semantic Chunking V2**:
+    - Implemented `chunk_section_paragraph_based` in `pdf_parser_v2.py`, replacing fixed-size chunking with paragraph-merging logic based on semantic similarity (Threshold: 0.8) up to a 1200-token limit.
+    - Switched to high-fidelity CLS pooling for `IEITYuan/Yuan-embedding-2.0-en` to improve embedding representation.
+- **Boosted GPU Inference Pipeline**:
+    - **ONNX/TensorRT Migration**: Integrated `optimum` and `onnxruntime-gpu` with `TensorrtExecutionProvider` to achieve line-rate embedding speeds.
+    - **Architecture Support (RTX 50-series)**: Resolved critical "sm_120" compatibility issues and GPU kernel errors by updating the environment to **PyTorch 2.9.1+cu128** and CUDA 12.8.
+    - **ONNX Input Engineering**: Implemented manual generation of `position_ids` within the inference loop to satisfy the requirements of the exported Yuan model graph.
+- **Environment & Reliability**:
+    - **uv Migration**: Fully adopted `uv` for streamlined dependency management and environment stability.
+    - **Windows DLL Injection**: Hardened the programmatic `PATH` and `add_dll_directory` logic across all backend scripts to ensure `nvinfer_10.dll` and other CUDA libraries are correctly loaded.
+    - **Pinecone Zero-Vector Fix**: Implemented protection against empty/non-semantic text segments by adding epsilon noise to zero-vectors, preventing `400 Bad Request` errors during batch upserts.
+- **Successful Validation**:
+    - Verified the end-to-end "Boosted" pipeline by successfully parsing, embedding (with TensorRT), and upserting **Cap 282** (440 chunks).
+
+### 🛠️ Current Status
+- **Pipeline**: End-to-end GPU-accelerated ingestion and retrieval are fully functional on the new hardware architecture.
+- **Chunking**: Semantic paragraph-merging is active, providing significantly better context boundaries for legal text.
+
+### 📅 Next Steps
+- [ ] Scale up ingestion to the full ordinance library using the boosted pipeline.
+- [ ] Measure and log the final throughput improvement (chunks/sec) compared to the non-boosted baseline.
+
+---
+*Log updated on 2026-01-17*
 

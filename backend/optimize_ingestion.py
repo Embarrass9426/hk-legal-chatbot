@@ -12,7 +12,7 @@ async def run_optimization():
     # Use specified caps for testing
     test_caps = ["6B", "6", "6A", "4", "3", "A501", "A601", "A7", "A602", "A305"]
     concurrency_range = range(3, 11)  # 3 to 10
-    embedding_batches = [16, 32, 64]
+    embedding_batches = [22]
     layout_batches = [4, 8, 16]
     
     from sentence_transformers import SentenceTransformer
@@ -35,8 +35,8 @@ async def run_optimization():
                 
                 start_time = time.time()
                 try:
-                    # Run the ingestion pipeline
-                    await ingest_legal_pdfs(cap_numbers=test_caps, batch_size=cb, embedding_batch_size=eb, model=model, layout_batch_size=lb, force_reprocess=True)
+                    # Run the ingestion pipeline without uploading to Pinecone to speed up benchmarking
+                    await ingest_legal_pdfs(cap_numbers=test_caps, batch_size=cb, embedding_batch_size=eb, model=model, layout_batch_size=lb, force_reprocess=True, skip_vector_upload=True)
                     duration = time.time() - start_time
                     
                     print(f"\n[RESULT] Time for CB={cb}, EB={eb}, LB={lb}: {duration:.2f} seconds")

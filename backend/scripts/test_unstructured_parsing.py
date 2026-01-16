@@ -49,7 +49,7 @@ def test_parse_specifics(file_path, target_page=None, target_section_keyword=Non
         
         elements = partition_pdf(
             filename=file_path,
-            strategy="hi_res",
+            strategy="fast",
             infer_table_structure=True,
             languages=["eng"],
             model_device=model_device,
