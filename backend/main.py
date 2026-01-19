@@ -4,6 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+import setup_env
+setup_env.setup_cuda_dlls()
+
 import utils
 import scraper
 import vector_store

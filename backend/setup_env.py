@@ -45,20 +45,19 @@ def setup_cuda_dlls():
         if torch_lib not in os.environ['PATH']:
              os.environ['PATH'] = torch_lib + os.pathsep + os.environ['PATH']
 
-    # Add Poppler to PATH for pdf2image/unstructured
-    poppler_bin = os.path.join(script_dir, "bin", "poppler", "poppler-24.08.0", "Library", "bin")
-    if os.path.exists(poppler_bin):
-        print(f"Adding Poppler to PATH: {poppler_bin}")
+    # Add TensorRT DLLs
+    trt_libs = os.path.join(venv_root, "Lib", "site-packages", "tensorrt_libs")
+    if os.path.exists(trt_libs):
+        print(f"Adding TensorRT DLLs: {trt_libs}")
         try:
-            os.add_dll_directory(poppler_bin)
-            os.environ['PATH'] = poppler_bin + os.pathsep + os.environ['PATH']
+            os.add_dll_directory(trt_libs)
+            os.environ['PATH'] = trt_libs + os.pathsep + os.environ['PATH']
         except Exception: pass
 
 if __name__ == "__main__":
     setup_cuda_dlls()
     try:
         import torch
-        import paddle
-        print(f"Success: Torch (CUDA: {torch.cuda.is_available()}), Paddle (CUDA: {paddle.device.is_compiled_with_cuda()})")
+        print(f"Success: Torch (CUDA: {torch.cuda.is_available()})")
     except Exception as e:
         print(f"Setup failed: {e}")

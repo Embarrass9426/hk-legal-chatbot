@@ -1,135 +1,75 @@
-import os
-import re
-import json
-import warnings
-import sys
-import site
-from typing import List, Dict, Any
-from pathlib import Path
-
-# Suppress specific deprecation warnings
-warnings.filterwarnings("ignore", message=".*max_size parameter is deprecated.*")
-
-import torch
-import numpy as np
-import torch.nn.functional as F
-from transformers import AutoTokenizer, AutoModel
-from optimum.onnxruntime import ORTModelForFeatureExtraction
+# backend/pdf_parser_v2.py
+from email.mime import text
+import os, re, json, time, warnings, torch, torch.nn.functional as F
+from typing import Dict
 from unstructured.partition.pdf import partition_pdf
-from unstructured.staging.base import elements_to_json
-
-# Fix for missing TensorRT DLLs (nvinfer_10.dll)
-try:
-    import tensorrt as trt
-    trt_path = os.path.join(os.path.dirname(trt.__file__), "..", "tensorrt_libs")
-    if os.path.exists(trt_path):
-        os.environ["PATH"] = trt_path + os.pathsep + os.environ["PATH"]
-        if hasattr(os, "add_dll_directory"):
-            os.add_dll_directory(trt_path)
-except Exception:
-    try:
-        site_packages = site.getsitepackages()[0]
-        trt_path = os.path.join(site_packages, "tensorrt_libs")
-        if os.path.exists(trt_path):
-            os.environ["PATH"] = trt_path + os.pathsep + os.environ["PATH"]
-            if hasattr(os, "add_dll_directory"):
-                os.add_dll_directory(trt_path)
-    except Exception:
-        pass
+from embedding_shared import job_q, result_q
 
 class PDFLegalParserV2:
-    def __init__(self, cap_number: str, pdf_dir: str = r"C:\Users\Embarrass\Desktop\vscode\hk-legal-chatbot\backend\data\pdfs", output_dir: str = r"C:\Users\Embarrass\Desktop\vscode\hk-legal-chatbot\backend\data\parsed", model=None, tokenizer=None):
+    def __init__(self, cap_number: str, pdf_dir: str, output_dir: str):
         self.cap_number = cap_number
         self.pdf_path = os.path.join(pdf_dir, f"cap{cap_number}.pdf")
-        # Base URL for the PDF without query parameters for cleaner anchors
-        self.base_pdf_url = f"https://www.elegislation.gov.hk/hk/cap{cap_number}!en.pdf"
-        self.url = f"{self.base_pdf_url}?FROMCAPINDEX=Y"
         self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
-        
-        # Initialize model and tokenizer for semantic chunking
-        model_name = "IEITYuan/Yuan-embedding-2.0-en"
-        model_path = r"C:\Users\Embarrass\Desktop\vscode\hk-legal-chatbot\backend\models\yuan-onnx-trt"
-        self.device = "cpu" # Force CPU for torch to avoid sm_120 compatibility issues on RTX 50-series
-        
-        if tokenizer:
-            self.tokenizer = tokenizer
-        else:
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                model_path if os.path.exists(model_path) else model_name, 
-                trust_remote_code=True,
-                fix_mistral_regex=True
-            )
-            
-        if model:
-            self.model = model
-        elif os.path.exists(os.path.join(model_path, "model.onnx")):
-            self.model = ORTModelForFeatureExtraction.from_pretrained(
-                model_path,
-                provider=["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"],
-                provider_options=[
-                    {
-                        "device_id": 0,
-                        "trt_fp16_enable": True,
-                        "trt_engine_cache_enable": True,
-                        "trt_engine_cache_path": model_path
-                    },
-                    {}, # CUDA
-                    {}  # CPU
-                ]
-            )
-        else:
-            self.model = AutoModel.from_pretrained(model_name, trust_remote_code=True).to(self.device)
-            self.model.eval()
-
-        
-        # Elements to drop and keep
+        self.base_pdf_url = f"https://www.elegislation.gov.hk/hk/cap{cap_number}!en.pdf"
+        self.url = f"{self.base_pdf_url}?FROMCAPINDEX=Y"
+        # Elements to drop entirely (noise / non‑content)
         self.DROP_TAGS = {
-            "FigureCaption", "Header", "Footer", "PageBreak", 
-            "Address", "EmailAddress", "CodeSnippet", "Formula", "Unknown"
+            "Header",
+            "Footer",
+            "PageHeader",
+            "PageFooter",
+            "FigureCaption",
+            "Figure",
+            "Picture",
+            "Image",
+            "Attachment",
+            "Formula",
+            "Equation",
+            "TableCaption",
+            "PageNumber",
+            "Metadata",
+            "TextBox",
+            "SectionHeader",
+            "Footnote",
+            "Endnote",
+            "Citation",
+            "NumberedFigure",
+            "UncategorizedText",
         }
+
+        # Elements we consider meaningful text content
         self.KEEP_TAGS = {
-            "Text", "Title", "NarrativeText", "ListItem", "Table", "Image", "UncategorizedText"
+            "Title",
+            "ListItem",
+            "NarrativeText",
+            "Table",
+            "Body",
+            "Paragraph",
         }
 
-    def _get_embeddings(self, texts: List[str]):
-        """Helper to get semantic embeddings for a list of strings using CLS pooling."""
-        with torch.no_grad():
-            inputs = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt").to(self.device)
-            
-            # Generate position_ids if required by the ORT model
-            if "position_ids" not in inputs:
-                batch_size, seq_len = inputs["input_ids"].shape
-                inputs["position_ids"] = torch.arange(seq_len, device=self.device).unsqueeze(0).expand(batch_size, -1)
-            
-            # Use CPU for tensors when calling ORT if device is CPU
-            # Convert to numpy for ORT if using direct InferenceSession, 
-            # but ORTModelForFeatureExtraction handles torch tensors if they are on the right device.
-            outputs = self.model(**inputs)
-            
-            # Use CLS pooling for Yuan-embedding (Index 0)
-            # Check the output type - ORTModelForFeatureExtraction usually returns a ModelOutput
-            if hasattr(outputs, "last_hidden_state"):
-                embeddings = outputs.last_hidden_state[:, 0, :]
+    # ──────────────────────────────────────────────
+    # Get embeddings via queue (never run model directly)
+    # ──────────────────────────────────────────────
+    def _get_embeddings(self, texts):
+        import uuid, time
+        job_id = str(uuid.uuid4())
+        job_q.put({"type": "embed_request", "id": job_id, "texts": texts})
+
+        while True:
+            result = result_q.get()
+            if result.get("id") == job_id:
+                if "error" in result:
+                    raise RuntimeError(f"Embedding worker error: {result['error']}")
+                return result["vectors"]
             else:
-                # Handle tuple/dict output from ORT
-                # Some versions/configs return a tuple where index 0 is the hidden states
-                # Let's be safer and check if it's a tensor first
-                hidden_states = outputs[0] if isinstance(outputs, (list, tuple)) else outputs["last_hidden_state"]
-                embeddings = hidden_states[:, 0, :]
-                
-            return F.normalize(embeddings, p=2, dim=1)
+                result_q.put(result)
+                time.sleep(0.01)
 
-    def _count_tokens(self, text: str):
-        """Counts tokens using the class tokenizer."""
-        return len(self.tokenizer.encode(text, add_special_tokens=False))
-
-    def parse_pdf(self, layout_batch_size=8):
-        """Partitions PDF into elements using Unstructured 'fast' strategy."""
-        if not os.path.exists(self.pdf_path):
-            raise FileNotFoundError(f"PDF local path not found: {self.pdf_path}")
-
-        print(f"Parsing Cap {self.cap_number} with 'fast' strategy...")
+    # ──────────────────────────────────────────────
+    # PDF parsing & chunking (unchanged logic)
+    # ──────────────────────────────────────────────
+    def parse_pdf(self, layout_batch_size=128):
         elements = partition_pdf(
             filename=self.pdf_path,
             strategy="fast",
@@ -140,6 +80,14 @@ class PDFLegalParserV2:
         )
         return elements
 
+    def load_parsed_json(self, path: str):
+            """Load previously parsed chunks JSON from disk."""
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Parsed JSON file not found: {path}")
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            print(f"📄 Loaded {len(data)} chunks from {path}")
+            return data
 
     def is_title(self, el):
         """Robust check if element is a section title."""
@@ -233,6 +181,10 @@ class PDFLegalParserV2:
             else:
                 break
         return current_page
+    
+    def _count_tokens(self, text: str) -> int:
+        """Simple whitespace-based token counting."""
+        return len(text.split())
 
     def chunk_section_paragraph_based(self, section_data: Dict, chunk_size=1200, overlap_sentences=2, threshold=0.8):
         """
@@ -247,17 +199,20 @@ class PDFLegalParserV2:
 
         # Step 2: Split text into paragraphs (separated by double newlines)
         paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
-
         if not paragraphs:
             return []
 
         # Step 3: Get embeddings for semantic similarity
         paragraph_embeddings = self._get_embeddings(paragraphs)
 
-        chunks = []                # will store final chunks
-        current_paragraphs = []    # buffer of paragraphs in current chunk
+        # 🔧 Convert to tensor if worker returned NumPy arrays
+        if not torch.is_tensor(paragraph_embeddings):
+            paragraph_embeddings = torch.tensor(paragraph_embeddings, dtype=torch.float32)
+
+        chunks = []
+        current_paragraphs = []
         current_tokens = 0
-        chunk_index = 0
+        chunk_index = 1
 
         # Trace paragraph offsets to map back to page numbers
         paragraph_offsets = []
@@ -359,7 +314,7 @@ class PDFLegalParserV2:
         slug = re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
         return slug[:100].strip('-')
 
-    def process_ordinance(self, skip_if_exists=True, layout_batch_size=16):
+    def process_ordinance(self, skip_if_exists=True, layout_batch_size=128):
         """Full pipeline for an ordinance. Skips parsing if JSON already exists."""
         output_path = os.path.join(self.output_dir, f"cap{self.cap_number}.json")
         
@@ -374,8 +329,26 @@ class PDFLegalParserV2:
         
         all_chunks = []
         for sec in sections_elements:
-            sec_chunks = self.chunk_section_paragraph_based(sec)
-            all_chunks.extend(sec_chunks)
+            sec_chunks = self.chunk_section_paragraph_based(sec, overlap_sentences=2)
+            
+            # Filter out chunks where content matches section_id exactly
+            # These are usually just redundant headers or structure elements
+            filtered_sec_chunks = []
+            for chunk in sec_chunks:
+                content_stripped = chunk["content"].strip().lower()
+                id_stripped = chunk["section_id"].strip().lower()
+                title_stripped = chunk["section_title"].strip().lower()
+                
+                # Drop if content is exactly the same as section_id or section_title
+                if content_stripped == id_stripped or content_stripped == title_stripped or not content_stripped:
+                    continue
+                filtered_sec_chunks.append(chunk)
+            
+            # Re-index remaining chunks for this section (1-based as per user example)
+            for i, chunk in enumerate(filtered_sec_chunks, 1):
+                chunk["chunk_index"] = i
+                
+            all_chunks.extend(filtered_sec_chunks)
             
         # Add total_chunks_in_section metadata
         section_groups = {}
@@ -398,9 +371,12 @@ class PDFLegalParserV2:
         print(f"Saved {len(chunks)} chunks to {output_path}")
 
 if __name__ == "__main__":
-    parser = PDFLegalParserV2("282") # Example Cap 282
-    try:
-        chunks = parser.process_ordinance()
-        print(f"Generated {len(chunks)} chunks.")
-    except Exception as e:
-        print(f"Error: {e}")
+    from pathlib import Path
+
+    pdf_dir = Path(r"C:\Users\Embarrass\Desktop\vscode\hk-legal-chatbot\backend\data\pdfs")
+    parsed_dir = Path(r"C:\Users\Embarrass\Desktop\vscode\hk-legal-chatbot\backend\data\parsed")
+
+    parser = PDFLegalParserV2("282", pdf_dir=pdf_dir, output_dir=parsed_dir)
+    chunks = parser.process_ordinance(skip_if_exists=False)
+    print(f"✅ Parsed {len(chunks)} chunks for Cap 282 (without embeddings).")
+

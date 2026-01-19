@@ -1,5 +1,7 @@
 import os
-import site
+import setup_env
+setup_env.setup_cuda_dlls()
+
 from typing import List, Dict, Any
 from pinecone import Pinecone, ServerlessSpec
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -9,26 +11,6 @@ from optimum.onnxruntime import ORTModelForFeatureExtraction
 import torch
 import torch.nn.functional as F
 from dotenv import load_dotenv
-
-# Fix for missing TensorRT DLLs (nvinfer_10.dll)
-try:
-    import tensorrt as trt
-    trt_path = os.path.join(os.path.dirname(trt.__file__), "..", "tensorrt_libs")
-    if os.path.exists(trt_path):
-        os.environ["PATH"] = trt_path + os.pathsep + os.environ["PATH"]
-        if hasattr(os, "add_dll_directory"):
-            os.add_dll_directory(trt_path)
-except Exception:
-    try:
-        import site
-        site_packages = site.getsitepackages()[0]
-        trt_path = os.path.join(site_packages, "tensorrt_libs")
-        if os.path.exists(trt_path):
-            os.environ["PATH"] = trt_path + os.pathsep + os.environ["PATH"]
-            if hasattr(os, "add_dll_directory"):
-                os.add_dll_directory(trt_path)
-    except Exception:
-        pass
 
 load_dotenv()
 
