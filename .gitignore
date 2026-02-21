@@ -1,27 +1,129 @@
-# Root gitignore
-node_modules/
+# ============================================================
+# Python
+# ============================================================
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+
+# Virtual Environments
 .venv/
+.venv-wsl/
+.wsl_venv/
+.uv_wsl_venv/
+venv/
+ENV/
+env/
+
+# Environment Variables
 .env
 .env.local
-.vscode/
+.env.*.local
+
+# ============================================================
+# Node / Frontend
+# ============================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 dist/
 .cache/
 
-# Ignore all downloaded PDFs and parsed data
+# ============================================================
+# Backend-Specific (HK Legal Chatbot)
+# ============================================================
+
+# PDFs and Parsed Data (LARGE FILES - never commit)
 backend/data/pdfs/
 backend/data/parsed/
-*.pyc
+backend/data/*.pdf
+
+# LLM Evaluation Results (can regenerate)
+backend/data/llm_audit_details.json
+backend/data/relevance.json
+backend/data/queries.jsonl
+
+# ML Models (LARGE FILES - download separately)
+backend/models/
+*.onnx
+*.trt
+*.engine
+
+# Poppler Binaries (platform-specific - download separately)
+backend/bin/
+
+# TensorRT Engine Cache (generated at runtime)
+backend/models/*/cache/
+
+# Unstructured.io Cache
 .unstructured_cache/
 
-# Artifacts and Debugging
+# Test Artifacts
+backend/tests/*.txt
+backend/tests/*.log
+backend/NUL
+
+# ============================================================
+# Sisyphus / OpenCode Work Files
+# ============================================================
+.sisyphus/evidence/
+.sisyphus/notepads/
+.sisyphus/handoffs/
+.sisyphus/analysis_*.md
+.sisyphus/status_report.md
+.sisyphus/boulder.json
+.sisyphus/ralph-loop.local.md
+
+# Keep plans and drafts (these are work artifacts worth versioning)
+# .sisyphus/plans/
+# .sisyphus/drafts/
+
+# ============================================================
+# IDE / Editor
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================================================
+# OS-Specific
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# Debugging / Development Artifacts
+# ============================================================
 *.pdf
 *.png
+*.jpg
+*.jpeg
 *.html
 *.xml
 debug_*
 index_*
-backend/models/
+ingestion_*.txt
+nul
+NUL
+*.log
+*.cache
 
-# Local bins
-backend/bin/
+# Linting / Formatting
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ============================================================
+# Git LFS (if using for large files)
+# ============================================================
+# Uncomment if you set up Git LFS for models/PDFs
+# *.onnx filter=lfs diff=lfs merge=lfs -text
+# *.pdf filter=lfs diff=lfs merge=lfs -text
