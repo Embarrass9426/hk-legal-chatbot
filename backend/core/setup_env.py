@@ -42,11 +42,45 @@ def _setup_linux_trt_libs():
 
     print(f"[setup_env] Found tensorrt_libs: {trt_dir}")
 
-    ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-    if trt_dir not in ld_path:
-        os.environ["LD_LIBRARY_PATH"] = trt_dir + (":" + ld_path if ld_path else "")
+    search_paths = [trt_dir]
 
-    so_files = sorted(_glob.glob(os.path.join(trt_dir, "libnvinfer*.so*")))
+    venv_prefix = getattr(sys, "prefix", "")
+    if venv_prefix:
+        nvidia_base = os.path.join(
+            venv_prefix,
+            "lib",
+            f"python{sys.version_info.major}.{sys.version_info.minor}",
+            "site-packages",
+            "nvidia",
+        )
+        if os.path.isdir(nvidia_base):
+            for root, dirs, _files in os.walk(nvidia_base):
+                if os.path.basename(root) == "lib":
+                    search_paths.append(root)
+
+    dedup_paths = []
+    for p in search_paths:
+        if p and p not in dedup_paths:
+            dedup_paths.append(p)
+
+    ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+    existing = [p for p in ld_path.split(":") if p]
+    merged = dedup_paths + [p for p in existing if p not in dedup_paths]
+    os.environ["LD_LIBRARY_PATH"] = ":".join(merged)
+
+    patterns = [
+        "libnvinfer*.so*",
+        "libnvonnxparser*.so*",
+        "libcudart*.so*",
+        "libcublas*.so*",
+        "libcudnn*.so*",
+    ]
+    so_files = []
+    for path in dedup_paths:
+        for pattern in patterns:
+            so_files.extend(_glob.glob(os.path.join(path, pattern)))
+
+    so_files = sorted(set(so_files))
     loaded = 0
     for so_path in so_files:
         try:

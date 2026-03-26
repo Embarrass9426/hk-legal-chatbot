@@ -2,12 +2,29 @@ import os
 import sys
 import threading
 import time
+import warnings
 
-# MUST setup CUDA DLLs before importing torch/onnxruntime
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import setup_env
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from backend.core import setup_env
 
 setup_env.setup_cuda_dlls()
+
+warnings.filterwarnings(
+    "ignore",
+    message=r".*CUDA capability.*not compatible with the current PyTorch installation.*",
+    category=UserWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message=r"(?s).*",
+    category=UserWarning,
+    module=r"torch\.cuda(\..*)?",
+)
 
 import torch
 import torch.nn.functional as F
@@ -21,6 +38,7 @@ from typing import List, Optional
 class EmbeddingService:
     _instance = None
     _init_lock = threading.Lock()
+    _bootstrap_lock = threading.Lock()
 
     def __new__(cls):
         if cls._instance is None:
@@ -42,12 +60,31 @@ class EmbeddingService:
         if self._initialized:
             return
 
-        self.model_path = self._get_model_path()
-        self.tokenizer = None
-        self.model = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self._load_model()
-        self._initialized = True
+        with self._bootstrap_lock:
+            if self._initialized:
+                return
+
+            self.model_path = self._get_model_path()
+            self.tokenizer = None
+            self.model = None
+            self.device = "cpu"
+            self.expected_dimension = int(os.getenv("EMBEDDING_DIMENSION", "1024"))
+            self.require_tensorrt = os.getenv(
+                "EMBEDDING_REQUIRE_TENSORRT", "1"
+            ).strip().lower() not in {"0", "false", "no"}
+            self.trt_fp16_preferred = os.getenv(
+                "EMBEDDING_TRT_FP16", "1"
+            ).strip().lower() not in {"0", "false", "no"}
+            self.strict_fp16 = os.getenv(
+                "EMBEDDING_STRICT_FP16", "1"
+            ).strip().lower() not in {
+                "0",
+                "false",
+                "no",
+            }
+            self._active_fp16 = self.trt_fp16_preferred
+            self._load_model()
+            self._initialized = True
 
     def _get_model_path(self) -> str:
         # Resolve path relative to this file: backend/services/embedding_service.py
@@ -84,32 +121,71 @@ class EmbeddingService:
             print(f"[EmbeddingService] Failed to load tokenizer: {e}")
             raise
 
-        # 2. Configure Providers (Priority: TensorRT -> CUDA -> CPU)
         sess_opt = ort.SessionOptions()
         sess_opt.intra_op_num_threads = 1
         sess_opt.inter_op_num_threads = 1
 
+        trt_fp16_enable = self._active_fp16
+        trt_cache_path = os.path.join(self.model_path, "cache")
+        os.makedirs(trt_cache_path, exist_ok=True)
+
         providers_config = [
             "TensorrtExecutionProvider",
-            "CUDAExecutionProvider",
             "CPUExecutionProvider",
+        ]
+        provider_options = [
+            {
+                "trt_fp16_enable": trt_fp16_enable,
+                "trt_engine_cache_enable": True,
+                "trt_engine_cache_path": trt_cache_path,
+                "trt_layer_norm_fp32_fallback": True,
+            },
+            {},
         ]
 
         print("[EmbeddingService] Initializing ORT with TensorRT provider")
+        print(f"[EmbeddingService] TensorRT FP16 enabled: {trt_fp16_enable}")
 
         self.model = ORTModelForFeatureExtraction.from_pretrained(
             self.model_path,
             providers=providers_config,
+            provider_options=provider_options,
             session_options=sess_opt,
             trust_remote_code=True,
         )
 
         # Log active providers
         if hasattr(self.model, "model"):
-            print(
-                f"[EmbeddingService] Active Providers: {self.model.model.get_providers()}"
-            )
-            self.model.use_io_binding = True
+            active_providers = self.model.model.get_providers()
+            print(f"[EmbeddingService] Active Providers: {active_providers}")
+
+            if (
+                self.require_tensorrt
+                and "TensorrtExecutionProvider" not in active_providers
+            ):
+                raise RuntimeError(
+                    "TensorRT provider is required but not active. "
+                    "Install/verify onnxruntime-gpu + TensorRT libraries in WSL and ensure "
+                    "backend/core/setup_env.py can preload tensorrt_libs."
+                )
+
+            if "CUDAExecutionProvider" in active_providers:
+                raise RuntimeError(
+                    "CUDAExecutionProvider is active, but this project is configured to avoid CUDA EP. "
+                    "Please remove CUDA EP from runtime provider chain."
+                )
+
+            self.model.use_io_binding = False
+
+    def _switch_to_fp32_tensorrt(self):
+        if not self._active_fp16:
+            return
+
+        print(
+            "[EmbeddingService] FP16 instability detected. Switching TensorRT to FP32."
+        )
+        self._active_fp16 = False
+        self._load_model()
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """
@@ -156,8 +232,8 @@ class EmbeddingService:
                     outputs = self.model(**inputs)
 
                 # Mean Pooling
-                last_hidden = outputs.last_hidden_state
-                attention_mask = inputs["attention_mask"]
+                last_hidden = outputs.last_hidden_state.detach().cpu()
+                attention_mask = inputs["attention_mask"].detach().cpu()
                 input_mask_expanded = (
                     attention_mask.unsqueeze(-1).expand(last_hidden.size()).float()
                 )
@@ -179,15 +255,45 @@ class EmbeddingService:
                         f"({embeddings.shape[0]} texts). Model may be broken — aborting."
                     )
                 if zero_rows.any():
-                    embeddings[zero_rows] += (
-                        torch.rand_like(embeddings[zero_rows]) * 1e-6
-                    )
+                    if self.strict_fp16:
+                        raise RuntimeError(
+                            f"Embedding produced {int(zero_rows.sum().item())} zero vectors in strict FP16 mode."
+                        )
+
+                    embeddings[zero_rows] += 1e-6
 
                 # Convert to list
-                return embeddings.cpu().numpy().tolist()
+                vectors = embeddings.cpu().numpy().astype(np.float32).tolist()
+
+                for idx, vec in enumerate(vectors):
+                    if len(vec) != self.expected_dimension:
+                        raise RuntimeError(
+                            f"Embedding dimension mismatch at row {idx}: "
+                            f"got {len(vec)}, expected {self.expected_dimension}."
+                        )
+
+                    l2 = float(np.linalg.norm(np.asarray(vec, dtype=np.float32)))
+                    if not np.isfinite(l2) or l2 <= 1e-8:
+                        raise RuntimeError(
+                            f"Invalid embedding norm at row {idx}: {l2}."
+                        )
+
+                return vectors
 
             except Exception as e:
                 error_msg = str(e)
+
+                validation_failure = (
+                    "all-zero vectors" in error_msg
+                    or "strict fp16 mode" in error_msg.lower()
+                    or "Invalid embedding norm" in error_msg
+                    or "dimension mismatch" in error_msg.lower()
+                )
+
+                if self._active_fp16 and validation_failure and not self.strict_fp16:
+                    self._switch_to_fp32_tensorrt()
+                    continue
+
                 is_transient = (
                     "enqueueV3" in error_msg
                     or "TensorRT EP" in error_msg

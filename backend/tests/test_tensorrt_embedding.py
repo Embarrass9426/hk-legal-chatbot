@@ -31,6 +31,11 @@ def main():
         return 1
     print("   [PASS] TensorRT is active")
 
+    if "CUDAExecutionProvider" in providers:
+        print("   [FAIL] CUDAExecutionProvider is active (must be disabled)")
+        return 1
+    print("   [PASS] CUDAExecutionProvider is not active")
+
     # Generate embeddings for test texts
     print("\n[3] Generating embeddings for sample texts...")
     test_texts = [

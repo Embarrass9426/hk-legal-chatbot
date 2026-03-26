@@ -5,8 +5,7 @@ import time
 import json
 import threading
 import uuid
-import torch
-import torch.nn.functional as F
+import numpy as np
 
 # Ensure project root is in sys.path (scripts -> backend -> project root = 3 levels)
 sys.path.append(
@@ -68,6 +67,21 @@ def format_elapsed_time(seconds):
     return f"{int(m)}m {int(s)}s"
 
 
+def _validate_vector(vector, expected_dim: int):
+    if len(vector) != expected_dim:
+        return False, f"dimension={len(vector)} expected={expected_dim}"
+
+    arr = np.asarray(vector, dtype=np.float32)
+    if not np.all(np.isfinite(arr)):
+        return False, "contains NaN/Inf"
+
+    norm = float(np.linalg.norm(arr))
+    if norm <= 1e-8:
+        return False, f"near-zero norm={norm}"
+
+    return True, "ok"
+
+
 # ------------------------------------------------------------------------------
 # Main Ingestion Logic
 # ------------------------------------------------------------------------------
@@ -76,8 +90,10 @@ async def ingest_legal_pdfs(
     batch_size=10,
     embedding_batch_size=128,
     force_parse=False,
+    skip_parse=False,
     force_embed=False,
     skip_vector_upload=False,
+    max_caps=None,
 ):
     """
     Main pipeline:
@@ -88,6 +104,14 @@ async def ingest_legal_pdfs(
     5. Upsert to Pinecone (unless skipped)
     """
 
+    requested_batch_size = batch_size
+    batch_size = 10
+    if requested_batch_size != 10:
+        print(
+            f"[Config Override] Enforcing document concurrency=10 "
+            f"(requested concurrency={requested_batch_size})"
+        )
+
     # 1. Start Background Worker
     worker_thread = threading.Thread(target=embedding_worker, daemon=True)
     worker_thread.start()
@@ -96,6 +120,18 @@ async def ingest_legal_pdfs(
         f"=== Starting Legal PDF Ingestion | concurrency={batch_size}, embedding batch={embedding_batch_size} ==="
     )
     start = time.time()
+    expected_dim = int(os.getenv("EMBEDDING_DIMENSION", "1024"))
+    embedding_precision = (
+        "fp16"
+        if os.getenv("EMBEDDING_TRT_FP16", "1").strip().lower()
+        not in {"0", "false", "no"}
+        else "fp32"
+    )
+    strict_fp16 = os.getenv("EMBEDDING_STRICT_FP16", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+    }
 
     # Paths
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -118,6 +154,10 @@ async def ingest_legal_pdfs(
                     target_caps.append(part)
 
     target_caps = sorted(target_caps, key=lambda x: (len(x), x))
+
+    if max_caps is not None:
+        target_caps = target_caps[: max(0, max_caps)]
+
     print(f"Found {len(target_caps)} ordinances to process: {target_caps}")
 
     # 3. Initialize Vector Store
@@ -134,15 +174,21 @@ async def ingest_legal_pdfs(
 
     # Processing State
     processed = {"count": 0, "total": len(target_caps)}
+    processed_lock = threading.Lock()
 
-    # Process each ordinance
-    for cap_num in target_caps:
+    def process_cap(cap_num: str):
         try:
-            # A. Parse (or Load) JSON
+            print(f"[Cap {cap_num}] Starting processing")
             json_path = os.path.join(parsed_dir, f"cap{cap_num}.json")
             chunks = []
 
-            if os.path.exists(json_path) and not force_parse:
+            if skip_parse and not os.path.exists(json_path):
+                print(
+                    f"[Skip Parse] Missing parsed JSON for Cap {cap_num}: {json_path}. Skipping."
+                )
+                return
+
+            if os.path.exists(json_path) and (skip_parse or not force_parse):
                 print(
                     f"Found existing parsed JSON for Cap {cap_num}. Skipping parsing."
                 )
@@ -157,17 +203,13 @@ async def ingest_legal_pdfs(
 
             if not chunks:
                 print(f"[Warning] No chunks found after parsing Cap {cap_num}.")
-                continue
+                return
 
             if force_embed:
                 print(
                     f"Force mode: Will re-generate embeddings and overwrite for Cap {cap_num}"
                 )
-            else:
-                # Simple check if embeddings exist (mock check for now to avoid Pinecone latency)
-                pass
 
-            # Prepare for Embedding
             chunk_texts = [c["content"] for c in chunks]
             total_chunks = len(chunk_texts)
             print(
@@ -177,6 +219,14 @@ async def ingest_legal_pdfs(
             all_vectors = []
             for i in range(0, total_chunks, embedding_batch_size):
                 batch_texts = chunk_texts[i : i + embedding_batch_size]
+                batch_num = (i // embedding_batch_size) + 1
+                total_batches = (
+                    total_chunks + embedding_batch_size - 1
+                ) // embedding_batch_size
+                print(
+                    f"Embedding batch {batch_num}/{total_batches} for Cap {cap_num} "
+                    f"(size={len(batch_texts)})"
+                )
 
                 job_id = str(uuid.uuid4())
                 job_q.put({"type": "embed_request", "id": job_id, "texts": batch_texts})
@@ -188,24 +238,29 @@ async def ingest_legal_pdfs(
                             raise RuntimeError(f"Embedding failed: {res['error']}")
                         all_vectors.extend(res["vectors"])
                         break
-                    else:
-                        result_q.put(res)
-                        time.sleep(0.01)
+                    result_q.put(res)
+                    time.sleep(0.01)
 
-            # D. Upsert to Pinecone
             if skip_vector_upload or not vsm:
                 print(
                     f"Skipping upload for Cap {cap_num} (skip_upload={skip_vector_upload})."
                 )
             else:
                 vectors_to_upsert = []
+                invalid_vectors = 0
                 for idx, chunk in enumerate(chunks):
-                    # Robust ID generation
                     doc_id = chunk.get("doc_id", f"cap{cap_num}")
                     chunk_idx = chunk.get("chunk_index", idx + 1)
                     vector_id = f"{doc_id}_chunk_{chunk_idx}"
+                    is_valid, reason = _validate_vector(all_vectors[idx], expected_dim)
+                    if not is_valid:
+                        invalid_vectors += 1
+                        print(f"[Vector Validation] Skip {vector_id}: {reason}")
+                        continue
 
-                    # Ensure metadata fields exist
+                    valid_values = np.asarray(
+                        all_vectors[idx], dtype=np.float32
+                    ).tolist()
                     metadata = {
                         "content": chunk.get("content", ""),
                         "page_number": chunk.get("page_number", 1),
@@ -214,17 +269,29 @@ async def ingest_legal_pdfs(
                         "doc_id": doc_id,
                         "citation": chunk.get("citation", f"Cap. {cap_num}"),
                         "source_url": chunk.get("source_url", ""),
+                        "embedding_precision": embedding_precision,
+                        "embedding_dimension": expected_dim,
+                        "embedding_strict_fp16": strict_fp16,
                     }
 
                     vectors_to_upsert.append(
                         {
                             "id": vector_id,
-                            "values": all_vectors[idx],
+                            "values": valid_values,
                             "metadata": metadata,
                         }
                     )
 
-                # Batch upsert
+                if invalid_vectors:
+                    print(
+                        f"[Vector Validation] Cap {cap_num}: filtered {invalid_vectors} invalid vectors before upsert"
+                    )
+
+                if not vectors_to_upsert:
+                    raise RuntimeError(
+                        f"All vectors invalid for Cap {cap_num}; aborting to prevent bad Pinecone writes."
+                    )
+
                 upsert_batch_limit = 100
                 total_upserted = 0
                 for i in range(0, len(vectors_to_upsert), upsert_batch_limit):
@@ -239,10 +306,12 @@ async def ingest_legal_pdfs(
                     f"[Worker] Uploaded {total_upserted} vectors for Cap {cap_num} to Pinecone."
                 )
 
-            processed["count"] += 1
+            with processed_lock:
+                processed["count"] += 1
+                done = processed["count"]
             elapsed = format_elapsed_time(time.time() - start)
             print(
-                f"Queued Cap {cap_num} embeddings ({len(chunks)} new) | Progress {processed['count']}/{processed['total']} | Elapsed {elapsed}"
+                f"Queued Cap {cap_num} embeddings ({len(chunks)} new) | Progress {done}/{processed['total']} | Elapsed {elapsed}"
             )
 
         except Exception as e:
@@ -250,7 +319,6 @@ async def ingest_legal_pdfs(
             import traceback
 
             traceback.print_exc()
-
             if "Embedding failed" in str(e):
                 print("\n[CRITICAL] Embedding service failed. Stopping ingestion.")
                 print("Possible causes:")
@@ -259,7 +327,15 @@ async def ingest_legal_pdfs(
                 )
                 print("  2. GPU memory exhausted - restart terminal")
                 print("  3. CUDA driver issue - check nvidia-smi")
-                sys.exit(1)
+                raise
+
+    semaphore = asyncio.Semaphore(batch_size)
+
+    async def _run_cap(cap_num: str):
+        async with semaphore:
+            await asyncio.to_thread(process_cap, cap_num)
+
+    await asyncio.gather(*[_run_cap(cap_num) for cap_num in target_caps])
 
     # Cleanup
     print("Waiting for GPU worker to finish remaining jobs...")
@@ -295,10 +371,22 @@ if __name__ == "__main__":
         help="Force re-parse PDFs even if JSON exists",
     )
     parser.add_argument(
+        "--skip-parse",
+        action="store_true",
+        default=False,
+        help="Never parse PDFs; only use existing parsed JSON files",
+    )
+    parser.add_argument(
         "--force-embed",
         action="store_true",
         default=True,
         help="Force re-generate embeddings even if they exist in Pinecone",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum number of caps to process after filtering",
     )
     parser.add_argument(
         "--skip-upload", action="store_true", help="Skip Pinecone upsert stage"
@@ -311,7 +399,9 @@ if __name__ == "__main__":
             batch_size=args.batch,
             embedding_batch_size=args.embedding_batch,
             force_parse=args.force_parse,
+            skip_parse=args.skip_parse,
             force_embed=args.force_embed,
             skip_vector_upload=args.skip_upload,
+            max_caps=args.limit,
         )
     )

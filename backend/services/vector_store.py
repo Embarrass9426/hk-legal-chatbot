@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from backend.core import setup_env
 
 setup_env.setup_cuda_dlls()
@@ -25,6 +26,20 @@ class VectorStoreManager:
             return
 
         self.pc = Pinecone(api_key=self.api_key)
+        self.expected_dimension = int(os.getenv("EMBEDDING_DIMENSION", "1024"))
+        self.expected_precision = (
+            "fp16"
+            if os.getenv("EMBEDDING_TRT_FP16", "1").strip().lower()
+            not in {"0", "false", "no"}
+            else "fp32"
+        )
+        self.strict_fp16 = os.getenv(
+            "EMBEDDING_STRICT_FP16", "1"
+        ).strip().lower() not in {
+            "0",
+            "false",
+            "no",
+        }
 
         # Initialize Embeddings via Singleton Service
         # This will auto-load the model if not already loaded
@@ -39,18 +54,73 @@ class VectorStoreManager:
         if self.index_name not in self.pc.list_indexes().names():
             self.pc.create_index(
                 name=self.index_name,
-                dimension=1024,  # Dimension for Yuan-embedding-2.0-en
+                dimension=self.expected_dimension,
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region="us-east-1"),
             )
 
         self.index = self.pc.Index(self.index_name)
 
+        index_info = self.pc.describe_index(self.index_name)
+        actual_dimension = getattr(index_info, "dimension", None)
+        if (
+            actual_dimension is not None
+            and int(actual_dimension) != self.expected_dimension
+        ):
+            raise ValueError(
+                f"Pinecone index dimension mismatch for '{self.index_name}': "
+                f"index={actual_dimension}, expected={self.expected_dimension}."
+            )
+
         self.vector_store = PineconeVectorStore(
             index_name=self.index_name,
             embedding=self.embeddings,
             pinecone_api_key=self.api_key,
         )
+
+    def _validate_query_vector(self, vector: List[float]):
+        if len(vector) != self.expected_dimension:
+            raise ValueError(
+                f"Query embedding dimension mismatch: got {len(vector)}, expected {self.expected_dimension}."
+            )
+
+        arr = np.asarray(vector, dtype=np.float32)
+        if not np.all(np.isfinite(arr)):
+            raise ValueError("Query embedding contains NaN/Inf values.")
+
+        l2 = float(np.linalg.norm(arr))
+        if l2 <= 1e-8:
+            raise ValueError("Query embedding norm is zero/near-zero.")
+
+    def _enforce_precision_regime(self):
+        probe = self.index.query(
+            vector=[1.0 / self.expected_dimension] * self.expected_dimension,
+            top_k=10,
+            include_metadata=True,
+            include_values=False,
+        )
+
+        matches = probe.get("matches", [])
+        if not matches:
+            return
+
+        for match in matches:
+            metadata = match.get("metadata") or {}
+            stored_precision = metadata.get("embedding_precision")
+
+            if self.strict_fp16 and not stored_precision:
+                raise ValueError(
+                    "Strict FP16 mode requires precision metadata on indexed vectors, "
+                    "but legacy vectors without embedding_precision were found. "
+                    "Re-embed the full corpus in strict FP16 mode."
+                )
+
+            if stored_precision and stored_precision != self.expected_precision:
+                raise ValueError(
+                    "Embedding precision regime mismatch: "
+                    f"index sample={stored_precision}, runtime={self.expected_precision}. "
+                    "Re-embed corpus with a single precision mode for stable search ranking."
+                )
 
     def upsert_chunks(self, chunks: List[Dict[str, Any]]):
         """
@@ -134,7 +204,7 @@ class VectorStoreManager:
             }
 
             section_results = index.query(
-                vector=[0] * 1024,  # Dummy vector for metadata-only filtering
+                vector=[1.0 / self.expected_dimension] * self.expected_dimension,
                 filter=query_filter,
                 top_k=100,
                 include_metadata=True,
@@ -172,8 +242,27 @@ class VectorStoreManager:
             f"Represent this question for retrieving relevant legal documents: {query}"
         )
 
-        # Similarity search for top-k chunks
-        return self.vector_store.similarity_search(query_with_prefix, k=k)
+        self._enforce_precision_regime()
+
+        query_vector = self.embeddings.embed_query(query_with_prefix)
+        self._validate_query_vector(query_vector)
+
+        matches = self.index.query(
+            vector=query_vector,
+            top_k=k,
+            include_metadata=True,
+            include_values=False,
+        )
+
+        from langchain_core.documents import Document
+
+        documents = []
+        for match in matches.get("matches", []):
+            metadata = match.get("metadata") or {}
+            page_content = metadata.get("content", "")
+            documents.append(Document(page_content=page_content, metadata=metadata))
+
+        return documents
 
     def _rerank(self, query: str, documents: List[Any], top_k: int = 5):
         """Internal reranking logic using Cross-Encoder model."""
