@@ -121,28 +121,47 @@ def setup_cuda_dlls():
 
     torch_lib = os.path.join(venv_root, "Lib", "site-packages", "torch", "lib")
     nvidia_base = os.path.join(venv_root, "Lib", "site-packages", "nvidia")
+    onnxruntime_capi = os.path.join(
+        venv_root,
+        "Lib",
+        "site-packages",
+        "onnxruntime",
+        "capi",
+    )
+
+    def _add_dll_dir(path: str, label: str):
+        if not path or not os.path.isdir(path):
+            return
+        print(f"Adding {label}: {path}")
+        try:
+            os.add_dll_directory(path)
+        except Exception:
+            pass
+        if path not in os.environ["PATH"]:
+            os.environ["PATH"] = path + os.pathsep + os.environ["PATH"]
 
     # Prioritize Torch DLLs (they are generally the most compatible)
     if os.path.exists(torch_lib):
-        print(f"Adding Torch DLLs: {torch_lib}")
-        try:
-            os.add_dll_directory(torch_lib)
-            os.environ["PATH"] = torch_lib + os.pathsep + os.environ["PATH"]
-        except Exception:
-            pass
+        _add_dll_dir(torch_lib, "Torch DLLs")
+
+    if os.path.exists(onnxruntime_capi):
+        _add_dll_dir(onnxruntime_capi, "ONNX Runtime DLLs")
 
     # Add ALL Nvidia bin folders found in site-packages
     if os.path.exists(nvidia_base):
-        # We need to find all subfolders containing 'bin'
+        seen_paths = set()
         for root, dirs, files in os.walk(nvidia_base):
-            if "bin" in dirs:
-                bin_path = os.path.join(root, "bin")
-                print(f"Adding Nvidia DLLs: {bin_path}")
-                try:
-                    os.add_dll_directory(bin_path)
-                    os.environ["PATH"] = bin_path + os.pathsep + os.environ["PATH"]
-                except Exception:
-                    pass
+            for folder in ("bin", "lib", "x64", "x86_64"):
+                if folder in dirs:
+                    candidate = os.path.join(root, folder)
+                    if candidate not in seen_paths:
+                        seen_paths.add(candidate)
+                        _add_dll_dir(candidate, "Nvidia DLLs")
+
+            has_dll = any(name.lower().endswith(".dll") for name in files)
+            if has_dll and root not in seen_paths:
+                seen_paths.add(root)
+                _add_dll_dir(root, "Nvidia DLLs")
 
     # Extra check for zlibwapi.dll which Paddle often misses
     zlib_path = os.path.join(torch_lib, "zlibwapi.dll")
@@ -154,12 +173,7 @@ def setup_cuda_dlls():
     # Add TensorRT DLLs
     trt_libs = os.path.join(venv_root, "Lib", "site-packages", "tensorrt_libs")
     if os.path.exists(trt_libs):
-        print(f"Adding TensorRT DLLs: {trt_libs}")
-        try:
-            os.add_dll_directory(trt_libs)
-            os.environ["PATH"] = trt_libs + os.pathsep + os.environ["PATH"]
-        except Exception:
-            pass
+        _add_dll_dir(trt_libs, "TensorRT DLLs")
 
 
 if __name__ == "__main__":

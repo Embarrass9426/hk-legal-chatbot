@@ -7,11 +7,9 @@ setup_env.setup_cuda_dlls()
 from typing import List, Dict, Any
 from pinecone import Pinecone, ServerlessSpec
 from langchain_pinecone import PineconeVectorStore
-from transformers import AutoTokenizer  # For reranker only
-from transformers import AutoModelForSequenceClassification  # For reranker only
-import torch
 from dotenv import load_dotenv
 from backend.services.embedding_service import get_embedding_service
+from backend.services.reranker_service import get_reranker_service
 
 load_dotenv()
 
@@ -40,15 +38,25 @@ class VectorStoreManager:
             "false",
             "no",
         }
+        self.enable_reranker = os.getenv(
+            "ENABLE_RERANKER", "1"
+        ).strip().lower() not in {
+            "0",
+            "false",
+            "no",
+        }
 
         # Initialize Embeddings via Singleton Service
         # This will auto-load the model if not already loaded
         print("[VectorStore] connecting to EmbeddingService...")
         self.embeddings = get_embedding_service()
 
-        # Initialize Reranker (Qwen3-Reranker-8B) - DISABLED FOR NOW
-        self.reranker_model = None
-        self.reranker_tokenizer = None
+        self.reranker = None
+        if self.enable_reranker:
+            print("[VectorStore] connecting to RerankerService...")
+            self.reranker = get_reranker_service()
+        else:
+            print("[VectorStore] Reranker disabled by ENABLE_RERANKER=0")
 
         # Create index if it doesn't exist
         if self.index_name not in self.pc.list_indexes().names():
@@ -168,36 +176,55 @@ class VectorStoreManager:
 
     def search_with_expansion(self, query: str, k: int = 10):
         """
-        Retrieves top-10 chunks, reranks to top-5, then expands to full section context.
+        Retrieves top-k chunks via similarity search, then expands each to its full section.
+        No reranking — just search + expand.
         """
         if not self.api_key:
             return []
 
-        # 1. Similarity search for top-k chunks
-        # Apply asymmetric prefix if required by Yuan embedding
         query_with_prefix = (
             f"Represent this question for retrieving relevant legal documents: {query}"
         )
-        # We fetch top-k directly since reranking is disabled
         initial_results = self.vector_store.similarity_search(query_with_prefix, k=k)
 
-        # 2. Reranking (DISABLED FOR NOW) - Using similarity results directly
-        reranked_results = initial_results
+        return self._expand_to_sections(initial_results)
 
-        # 3. Identify unique sections from retrieved chunks to expand logic
+    def search_with_rerank_and_expansion(
+        self, query: str, k: int = 10, rerank_top_k: int = 5
+    ):
+        """
+        Strategy D: vector search top_k -> rerank to rerank_top_k -> expand those to full sections.
+        """
+        if not self.api_key:
+            return []
+
+        query_with_prefix = (
+            f"Represent this question for retrieving relevant legal documents: {query}"
+        )
+        initial_results = self.vector_store.similarity_search(query_with_prefix, k=k)
+
+        if self.reranker is None:
+            return self._expand_to_sections(initial_results[:rerank_top_k])
+
+        reranked = self.reranker.rerank(query, initial_results, top_k=rerank_top_k)
+
+        return self._expand_to_sections(reranked)
+
+    def _expand_to_sections(self, documents: List[Any]):
+        """
+        Given a list of chunk Documents, fetch all sibling chunks for each unique section.
+        """
         sections_to_fetch = set()
-        for doc in reranked_results:
+        for doc in documents:
             doc_id = doc.metadata.get("doc_id")
             section_id = doc.metadata.get("section_id")
             if doc_id and section_id:
                 sections_to_fetch.add((doc_id, section_id))
 
-        # 4. Fetch all siblings for each identified section
         expanded_context = []
         index = self.pc.Index(self.index_name)
 
         for doc_id, section_id in sections_to_fetch:
-            # Query Pinecone by metadata filter to get all chunks in section
             query_filter = {
                 "doc_id": {"$eq": doc_id},
                 "section_id": {"$eq": section_id},
@@ -211,17 +238,17 @@ class VectorStoreManager:
                 include_values=False,
             )
 
-            # Extract and sort by chunk_index
             section_chunks = []
             for match in section_results["matches"]:
+                metadata = match["metadata"]
+                content = metadata.get("text", "") or metadata.get("content", "")
                 section_chunks.append(
                     {
-                        "content": match["metadata"].get("text", ""),
-                        "metadata": match["metadata"],
+                        "content": content,
+                        "metadata": metadata,
                     }
                 )
 
-            # Sort by chunk_index
             section_chunks.sort(key=lambda x: x["metadata"].get("chunk_index", 0))
 
             expanded_context.append(
@@ -265,31 +292,6 @@ class VectorStoreManager:
         return documents
 
     def _rerank(self, query: str, documents: List[Any], top_k: int = 5):
-        """Internal reranking logic using Cross-Encoder model."""
-        if not self.reranker_model or not documents:
+        if self.reranker is None:
             return documents[:top_k]
-
-        pairs = [[query, doc.page_content] for doc in documents]
-
-        # Get the device the model is on
-        device = next(self.reranker_model.parameters()).device
-
-        with torch.no_grad():
-            inputs = self.reranker_tokenizer(
-                pairs,
-                padding=True,
-                truncation=True,
-                return_tensors="pt",
-                max_length=512,
-            ).to(device)
-            scores = (
-                self.reranker_model(**inputs)
-                .logits.view(
-                    -1,
-                )
-                .float()
-            )
-
-        # Pair scores with documents and sort
-        scored_docs = sorted(zip(scores, documents), key=lambda x: x[0], reverse=True)
-        return [doc for score, doc in scored_docs[:top_k]]
+        return self.reranker.rerank(query, documents, top_k=top_k)

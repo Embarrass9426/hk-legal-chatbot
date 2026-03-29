@@ -5,11 +5,13 @@ Test script to verify TensorRT embedding generation works correctly.
 import sys
 import os
 
-# Add backend to path
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, backend_dir)
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-from services.embedding_service import EmbeddingService
+from backend.services.embedding_service import EmbeddingService
 
 
 def main():

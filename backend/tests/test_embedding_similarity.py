@@ -1,18 +1,28 @@
 import os
+import sys
 import torch
 import torch.nn.functional as F
 import numpy as np
 from pinecone import Pinecone
 from dotenv import load_dotenv
-from vector_store import VectorStoreManager
+
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from backend.services.vector_store import VectorStoreManager
 
 # Load environment variables
 load_dotenv()
+
 
 def cosine_similarity(v1, v2):
     v1 = np.array(v1)
     v2 = np.array(v2)
     return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+
 
 def main():
     # 1. Initialize VectorStoreManager (uses BoostedYuanEmbeddings with CLS pooling)
@@ -28,33 +38,39 @@ def main():
         "section_id": "preamble",
         "section_title": "Preamble",
         "doc_id": "cap1",
-        "citation": "Cap. 1, Preamble"
+        "citation": "Cap. 1, Preamble",
     }
 
     # 3. Test ID Formats
     id_format_ingest = f"cap1_chunk_1"
     id_format_manager = f"cap1-preamble-1"
-    
+
     print(f"Checking for IDs: {id_format_ingest}, {id_format_manager}")
-    
+
     fetch_response = index.fetch(ids=[id_format_ingest, id_format_manager])
-    
+
     found_id = None
     stored_vector = None
-    
+
     for vid in [id_format_ingest, id_format_manager]:
         if vid in fetch_response.vectors:
             print(f"Found vector with ID: {vid}")
             found_id = vid
             stored_vector = fetch_response.vectors[vid].values
             break
-            
+
     if not found_id:
-        print("[ERROR] Could not find either ID in Pinecone. Here are some vectors in the index:")
+        print(
+            "[ERROR] Could not find either ID in Pinecone. Here are some vectors in the index:"
+        )
         # Try to find anything cap1 related
-        results = index.query(vector=[0]*1024, top_k=5, filter={"doc_id": "cap1"}, include_metadata=True)
+        results = index.query(
+            vector=[0] * 1024, top_k=5, filter={"doc_id": "cap1"}, include_metadata=True
+        )
         if results.matches:
-            print(f"Found {len(results.matches)} matches for 'cap1' filter. Example ID: {results.matches[0].id}")
+            print(
+                f"Found {len(results.matches)} matches for 'cap1' filter. Example ID: {results.matches[0].id}"
+            )
             found_id = results.matches[0].id
             stored_vector = index.fetch(ids=[found_id]).vectors[found_id].values
         else:
@@ -62,16 +78,18 @@ def main():
             return
 
     # 4. Generate local embedding using the current model in VectorStoreManager
-    # Note: VectorStoreManager.upsert_chunks uses a prefix. 
+    # Note: VectorStoreManager.upsert_chunks uses a prefix.
     # ingest_legal_pdfs.py uses '{title}\n{content}'.
-    
+
     # We will try both to see which matches better.
-    
-    text_variant_1 = f"Represent this legal document passage for retrieval: {chunk_data['content']}"
+
+    text_variant_1 = (
+        f"Represent this legal document passage for retrieval: {chunk_data['content']}"
+    )
     text_variant_2 = f"{chunk_data['section_title']}\n{chunk_data['content']}"
-    
+
     print("\n--- Generating Local Embeddings ---")
-    
+
     # Using the embedding class from VectorStoreManager
     emb_v1 = vsm.embeddings.embed_query(text_variant_1)
     emb_v2 = vsm.embeddings.embed_query(text_variant_2)
@@ -79,22 +97,29 @@ def main():
     print("Stored vector norm:", np.linalg.norm(stored_vector))
     print("Local emb_v1 norm:", np.linalg.norm(emb_v1))
     print("Local emb_v2 norm:", np.linalg.norm(emb_v2))
-    
+
     # 5. Calculate Similarity
     sim1 = cosine_similarity(emb_v1, stored_vector)
     sim2 = cosine_similarity(emb_v2, stored_vector)
-    
+
     print(f"\nComparing with stored ID: {found_id}")
     print(f"Similarity (Prefix: 'Represent this...'): {sim1:.4f}")
     print(f"Similarity (Prefix: 'Preamble\\n...'): {sim2:.4f}")
-    
+
     if max(sim1, sim2) > 0.99:
-        print("\nMATCH FOUND! The local model is consistent with the stored embeddings.")
+        print(
+            "\nMATCH FOUND! The local model is consistent with the stored embeddings."
+        )
     elif max(sim1, sim2) > 0.9:
-        print("\nCLOSE MATCH. The model is likely the same, but there might be slight pooling or precision differences.")
+        print(
+            "\nCLOSE MATCH. The model is likely the same, but there might be slight pooling or precision differences."
+        )
     else:
-        print("\n[ERROR] NO MATCH. The model or processing logic (pooling/normalization) differs significantly.")
+        print(
+            "\n[ERROR] NO MATCH. The model or processing logic (pooling/normalization) differs significantly."
+        )
         print("Distance check: The stored vector and local vector are different.")
+
 
 if __name__ == "__main__":
     main()

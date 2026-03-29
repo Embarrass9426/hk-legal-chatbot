@@ -83,6 +83,18 @@ class EmbeddingService:
                 "no",
             }
             self._active_fp16 = self.trt_fp16_preferred
+            self.trt_max_workspace_size = int(
+                os.getenv("EMBEDDING_TRT_MAX_WORKSPACE_SIZE", "268435456")
+            )
+            self.trt_min_subgraph_size = int(
+                os.getenv("EMBEDDING_TRT_MIN_SUBGRAPH_SIZE", "5")
+            )
+            self.trt_max_partition_iterations = int(
+                os.getenv("EMBEDDING_TRT_MAX_PARTITION_ITERATIONS", "200")
+            )
+            self.trt_auxiliary_streams = int(
+                os.getenv("EMBEDDING_TRT_AUX_STREAMS", "0")
+            )
             self._load_model()
             self._initialized = True
 
@@ -129,22 +141,56 @@ class EmbeddingService:
         trt_cache_path = os.path.join(self.model_path, "cache")
         os.makedirs(trt_cache_path, exist_ok=True)
 
-        providers_config = [
-            "TensorrtExecutionProvider",
-            "CPUExecutionProvider",
-        ]
-        provider_options = [
-            {
-                "trt_fp16_enable": trt_fp16_enable,
-                "trt_engine_cache_enable": True,
-                "trt_engine_cache_path": trt_cache_path,
-                "trt_layer_norm_fp32_fallback": True,
-            },
-            {},
-        ]
+        available_providers = ort.get_available_providers()
+        has_tensorrt_provider = "TensorrtExecutionProvider" in available_providers
 
-        print("[EmbeddingService] Initializing ORT with TensorRT provider")
-        print(f"[EmbeddingService] TensorRT FP16 enabled: {trt_fp16_enable}")
+        if self.require_tensorrt and not has_tensorrt_provider:
+            raise RuntimeError(
+                "TensorRT provider is required but unavailable in this runtime. "
+                "Set EMBEDDING_REQUIRE_TENSORRT=0 to allow CPU fallback or install "
+                "a runtime exposing TensorrtExecutionProvider. "
+                f"Available providers: {available_providers}"
+            )
+
+        use_tensorrt = has_tensorrt_provider
+
+        if use_tensorrt:
+            providers_config = [
+                "TensorrtExecutionProvider",
+                "CPUExecutionProvider",
+            ]
+            provider_options = [
+                {
+                    "trt_fp16_enable": trt_fp16_enable,
+                    "trt_engine_cache_enable": True,
+                    "trt_engine_cache_path": trt_cache_path,
+                    "trt_layer_norm_fp32_fallback": True,
+                    "trt_max_workspace_size": self.trt_max_workspace_size,
+                    "trt_min_subgraph_size": self.trt_min_subgraph_size,
+                    "trt_max_partition_iterations": self.trt_max_partition_iterations,
+                    "trt_auxiliary_streams": self.trt_auxiliary_streams,
+                    "trt_context_memory_sharing_enable": True,
+                    "trt_builder_optimization_level": 2,
+                    "trt_force_sequential_engine_build": True,
+                },
+                {},
+            ]
+            print("[EmbeddingService] Initializing ORT with TensorRT provider")
+            print(f"[EmbeddingService] TensorRT FP16 enabled: {trt_fp16_enable}")
+            print(
+                "[EmbeddingService] TensorRT opts: "
+                f"workspace={self.trt_max_workspace_size}, "
+                f"min_subgraph={self.trt_min_subgraph_size}, "
+                f"max_partition_iterations={self.trt_max_partition_iterations}, "
+                f"aux_streams={self.trt_auxiliary_streams}"
+            )
+        else:
+            providers_config = ["CPUExecutionProvider"]
+            provider_options = [{}]
+            print(
+                "[EmbeddingService] TensorrtExecutionProvider unavailable. "
+                "Falling back to CPUExecutionProvider."
+            )
 
         self.model = ORTModelForFeatureExtraction.from_pretrained(
             self.model_path,
