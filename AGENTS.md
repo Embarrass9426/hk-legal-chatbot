@@ -79,7 +79,7 @@ npm run preview
 - Ruff default settings; 4-space indent; ~88 character line length.
 - Naming: `snake_case` for functions/vars/modules, `PascalCase` for classes, `UPPER_SNAKE` for constants, `_prefix` for private methods.
 - Imports: stdlib → third-party → local; local imports use `backend.*` absolute paths.
-- `main.py` bare sibling imports (`import utils`) are a legacy exception; do not copy that pattern into new code.
+- `main.py` bare sibling imports (`import utils`) are a legacy exception; some standalone test scripts in `backend/tests/` also use bare module imports — do not copy either pattern into new production code.
 - Call `setup_env.setup_cuda_dlls()` before any `torch` or `onnxruntime` import.
 - Load API keys with `load_dotenv()` from `backend/.env`; never hardcode secrets.
 - Public call signatures use type hints; prefer `typing` imports such as `List`, `Dict`, `Any`, `Optional`.
@@ -148,7 +148,7 @@ npm run preview
 ## ANTI-PATTERNS
 
 - Never import `torch` or `onnxruntime` before `setup_env.setup_cuda_dlls()`.
-- Never commit absolute paths except in `__main__` blocks.
+- Never commit absolute paths in shared/library code; `__main__` blocks and standalone test scripts are the only accepted exceptions.
 - Never add per-component CSS files; use Tailwind utilities only.
 - Never commit `.env`, PDFs, model binaries, or `backend/bin/` contents.
 - Never use `except: pass`; always log or surface the error.
