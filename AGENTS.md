@@ -1,63 +1,36 @@
-# PROJECT KNOWLEDGE BASE
+# AGENTS GUIDE — HK Legal Chatbot
+Purpose: practical instructions for coding agents operating in this repository.
 
-## PURPOSE
+Scope precedence:
+1. Actual code behavior + tool output
+2. Nearest subtree guide (`backend/AGENTS.md`, `frontend/AGENTS.md`)
+3. This root `AGENTS.md`
 
-Root reference for agents working in HK Legal Chatbot: a FastAPI + ONNX/TensorRT backend, Pinecone retrieval, and a React/Vite/Tailwind frontend for streaming legal Q&A over Hong Kong e-Legislation PDFs.
+---
 
-## REPO MAP
+## 1) Operating Model
+- Monorepo with two active apps:
+  - `backend/` — FastAPI backend + retrieval/embedding pipeline
+  - `frontend/` — React + Vite + Tailwind UI
+- Working directory rules:
+  - Backend commands run from repo root (`backend\...` paths on Windows)
+  - Frontend commands run inside `frontend/`
+- Keep edits scoped to the target app unless cross-app behavior is required.
 
-- `backend/`: Python app, parsers, services, scripts, and standalone test scripts.
-- `frontend/`: React + Vite + Tailwind UI with chat and reference components.
-- `docs/`: design notes and parser/RAG writeups.
-- `backend/bin/`, `backend/data/`, `backend/models/`: gitignored runtime assets.
-- `backend/main.py`: FastAPI app entry point.
-- `backend/core/setup_env.py`: CUDA/DLL bootstrap before `torch` or `onnxruntime`.
-- `backend/core/utils.py`: retrieval rewrite helpers.
-- `backend/services/embedding_service.py`: singleton embedding service.
-- `backend/services/vector_store.py`: Pinecone/vector-store logic.
-- `backend/parsers/pdf_parser.py`: `PDFLegalParserV2`.
-- `backend/scripts/ingest_pdfs.py`: PDF ingest workflow.
-- `backend/tests/`: standalone verification scripts, not pytest.
-- `frontend/package.json`: `dev`, `build`, `lint`, `preview` scripts.
-- `frontend/eslint.config.js`: ESLint 9 flat config.
-- `frontend/tailwind.config.js`: class-based dark mode.
-- `frontend/src/App.jsx`: app shell and dark-mode state.
-- `frontend/src/components/ChatInterface.jsx`: streaming chat UI.
-- `frontend/src/components/ReferenceCard.jsx`: citation cards.
-- `frontend/src/index.css`: global prose styles.
-- `docs/PDF_PARSER_LOGIC.md` and `docs/RAG_DESIGN.md`: design references.
+## 2) Cursor / Copilot Rules Status
+Checked in repo root:
+- `.cursorrules` → not found
+- `.cursor/rules/` → not found
+- `.github/copilot-instructions.md` → not found
+No additional Cursor/Copilot instruction files currently apply.
 
-## AGENTS HIERARCHY
+---
 
-`backend/AGENTS.md` and `frontend/AGENTS.md` override this root guidance inside their subtrees.
+## 3) Commands (Build / Lint / Test)
 
-## EDITOR-RULE NOTE
-
-No `.cursor/rules/**`, `.cursorrules`, or `.github/copilot-instructions.md` files exist here; follow AGENTS files only.
-
-## COMMANDS
-
-### Backend (run from repo root)
-
-```bash
-python backend/main.py
-python backend/scripts/ingest_pdfs.py --cap 282 599A
-python backend/scripts/ingest_pdfs.py --force-parse --skip-upload
-uv pip install -r backend/requirements.txt
-```
-
-### Backend tests (standalone scripts; run from repo root)
-
-```bash
-python backend/tests/test_dll.py
-python backend/tests/test_embedding_similarity.py
-python backend/tests/test_tensorrt_embedding.py
-```
-
-These are the only test workflow entries in this repo; there is no pytest suite.
-
-### Frontend (run from `frontend/`)
-
+### 3.1 Frontend commands
+Workdir: `frontend/`
+Source: `frontend/package.json`
 ```bash
 npm install
 npm run dev
@@ -65,93 +38,127 @@ npm run build
 npm run lint
 npm run preview
 ```
+Notes:
+- `build` runs `vite build`
+- `lint` runs `eslint .`
+- No frontend `test` script is defined currently
 
-## WORKFLOW NOTES
+### 3.2 Backend setup
+Workdir: repo root
+Windows setup (recommended):
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r backend\requirements.txt
+```
+WSL/Linux setup (when intentionally using Linux runtime):
+```bash
+python3 -m venv .venv-wsl
+source .venv-wsl/bin/activate
+python -m pip install --upgrade pip
+pip install -r backend/requirements.txt
+```
 
-- Keep repo-wide guidance in this file; let subtree AGENTS files handle local overrides.
-- Use the backend test scripts individually when checking runtime behavior.
-- The frontend scripts are the only documented npm workflows here.
-- Prefer the file paths listed below when orienting yourself in the codebase.
-- Keep changes grounded in the files that actually exist in this repository.
+### 3.3 Backend run commands
+Workdir: repo root
+```powershell
+python backend\main.py
+python backend\llm_evaluate.py
+python backend\scripts\ingest_pdfs.py --cap 282 599A
+```
 
-## BACKEND STYLE
+### 3.4 Backend tests (single-test rule)
+Workdir: repo root
+Current tests are script-style files in `backend/tests/`.
+Run one test file directly:
+```powershell
+python backend\tests\test_dll.py
+python backend\tests\test_embedding_similarity.py
+python backend\tests\test_tensorrt_embedding.py
+```
+Single-test rule:
+- Execute one `test_*.py` file at a time: `python <path-to-test-file>`
+- Do **not** assume `pytest -k`/marker workflows are configured
 
-- Ruff default settings; 4-space indent; ~88 character line length.
-- Naming: `snake_case` for functions/vars/modules, `PascalCase` for classes, `UPPER_SNAKE` for constants, `_prefix` for private methods.
-- Imports: stdlib → third-party → local; local imports use `backend.*` absolute paths.
-- `main.py` bare sibling imports (`import utils`) are a legacy exception; some standalone test scripts in `backend/tests/` also use bare module imports — do not copy either pattern into new production code.
-- Call `setup_env.setup_cuda_dlls()` before any `torch` or `onnxruntime` import.
-- Load API keys with `load_dotenv()` from `backend/.env`; never hardcode secrets.
-- Public call signatures use type hints; prefer `typing` imports such as `List`, `Dict`, `Any`, `Optional`.
-- Error handling uses `try/except Exception` with `print()`; scripts use `traceback.print_exc()`; never `except: pass`.
-- Every script intended for direct execution should keep an `if __name__ == "__main__"` guard.
-- Use `os.path` relative to `__file__`; avoid absolute paths in committed code.
-- Pydantic models are used for request/response schemas in the FastAPI app.
-- Follow the existing `print()`-based error reporting style in backend modules and scripts.
-- Keep direct-run scripts import-safe and guarded by `if __name__ == "__main__"`.
+---
 
-## FRONTEND STYLE
+## 4) Code Style Guidelines
 
-- ESLint 9 flat config in `frontend/eslint.config.js`; `react-hooks` and `react-refresh` plugins are enabled.
-- `no-unused-vars` errors except names matching `^[A-Z_]`.
-- 2-space indent and single quotes for JS strings.
-- Functional components only, with hooks; destructure props; default export per `.jsx` file.
-- Tailwind CSS 4.0 utility classes only; no per-component CSS files.
-- Dark mode is class-based with `darkMode: 'class'` in `tailwind.config.js`.
-- Global prose styles live in `frontend/src/index.css`; `@tailwindcss/typography` is used; `lucide-react` supplies icons.
-- State stays local with `useState` and `useEffect`; no Redux or Context.
-- Markdown rendering uses `react-markdown` plus `remark-gfm`.
-- Chat requests use direct `fetch()` to `http://localhost:8000`, with SSE streaming via `ReadableStream`.
-- The app uses functional components only; no class components are present.
-- `lucide-react` supplies icons in the UI.
-- Tailwind utility classes should cover styling needs without component CSS files.
+### 4.1 Cross-cutting
+- Prefer small, local edits first; avoid broad refactors unless requested.
+- Match surrounding style in each touched file.
+- Reuse existing architecture/patterns before introducing abstractions.
+- Never hardcode secrets; backend credentials belong in `.env`.
 
-## WHERE TO LOOK
+### 4.2 Python backend
+Observed in `backend/main.py`, `backend/core/setup_env.py`, `backend/services/vector_store.py`.
+- Imports follow: stdlib → third-party → local `backend.*`
+- Naming: `snake_case` (functions/vars/modules), `PascalCase` (classes), `UPPER_SNAKE_CASE` (constants)
+- Typing: keep hints on public helpers and non-trivial internals
+- Formatting: 4-space indentation, double quotes are common, no semicolons
+- Error handling: explicit `try/except Exception as e` with context; no silent failures
+- Script execution: many modules support `if __name__ == "__main__":`
 
-| Task | Location | Notes |
-|---|---|---|
-| API endpoints | `backend/main.py` | `/chat` streaming POST, `/` health |
-| PDF parsing | `backend/parsers/pdf_parser.py` | `PDFLegalParserV2` |
-| Vector search | `backend/services/vector_store.py` | `VectorStoreManager` |
-| Embeddings | `backend/services/embedding_service.py` | Singleton ONNX/TRT service |
-| Query rewrite | `backend/core/utils.py` | Retrieval rewrite helpers |
-| Env bootstrap | `backend/core/setup_env.py` | Load DLLs before torch/onnxruntime |
-| CUDA/DLL setup | `backend/core/setup_env.py` | CUDA DLL prep before imports |
-| PDF ingestion | `backend/scripts/ingest_pdfs.py` | Parse, embed, upsert flow |
-| Backend tests | `backend/tests/` | `test_dll.py`, `test_embedding_similarity.py`, `test_tensorrt_embedding.py` |
-| Chat UI | `frontend/src/components/ChatInterface.jsx` | Streaming chat UI |
-| Reference cards | `frontend/src/components/ReferenceCard.jsx` | Citation display |
-| App shell | `frontend/src/App.jsx` | Root UI and dark mode |
-| Global styles | `frontend/src/index.css` | Prose styles and Tailwind base |
-| ESLint config | `frontend/eslint.config.js` | Flat config and `no-unused-vars` rule |
-| Tailwind config | `frontend/tailwind.config.js` | `darkMode: 'class'` |
+### 4.3 Frontend React/JSX
+Observed in `frontend/src/App.jsx`, `frontend/src/components/ChatInterface.jsx`, `frontend/src/main.jsx`.
+- ESM project (`"type": "module"`) with functional components + hooks
+- Naming: `PascalCase` components, `camelCase` vars/functions, `UPPER_SNAKE_CASE` constants
+- Formatting: 2-space indentation, single quotes common, semicolon usage mixed (follow local file)
+- Styling: Tailwind utility classes by default; dark mode via root `dark` class
+- API: direct `fetch()` + SSE stream parsing are established patterns
+- Lint (`frontend/eslint.config.js`):
+  - `react-hooks` recommended rules enabled
+  - `react-refresh` Vite rules enabled
+  - `no-unused-vars` is error (`varsIgnorePattern: '^[A-Z_]'`)
 
-## OPERATING CONSTRAINTS
+---
 
-- No pytest, no `npm test`, and no extra test runner assumptions.
-- No speculative tooling or commands; use only the scripts documented above.
-- No TypeScript rules: this repo is JavaScript/JSX only.
-- No `.env`, PDF, model, or `backend/bin/` content should be treated as source files.
-- No per-component CSS files should be introduced for UI work.
-- No structured-logging requirement is documented here; backend code uses prints and tracebacks.
-- No new npm dependency should be added without checking existing packages first.
+## 5) Critical Guardrails
 
-## ENVIRONMENT
+### 5.1 Runtime invariants (backend)
+- `setup_env.setup_cuda_dlls()` must run **before** torch/onnxruntime imports
+- Preserve this ordering in startup and embedding-related code
+- Do not mix Windows and WSL virtualenvs in one runtime flow
 
-- Python 3.12+; `uv` preferred, pip is the fallback.
-- Node targets Vite 7.x / React 19.x and uses ESM.
-- CUDA 12.4 + TensorRT are optional; CPU/ONNX fallback exists.
-- External services: Pinecone and DeepSeek via OpenAI-compatible API.
-- Required API keys live in `backend/.env`: `DEEPSEEK_API_KEY` and `PINECONE_API_KEY`.
-- Runtime artifacts under `backend/bin/`, `backend/data/`, and `backend/models/` are gitignored.
+### 5.2 Imports / dependencies / paths
+- Keep import order and spacing aligned with nearby files
+- In backend reusable modules, prefer absolute `backend.*` imports
+- Avoid machine-specific absolute paths in committed source
+- Check existing dependencies before adding new packages
+- Do not add frontend deps if existing stack already covers the use case
 
-## ANTI-PATTERNS
+### 5.3 Error handling expectations
+- No empty `catch` / `except` blocks
+- Include enough context for fast debugging
+- Backend: keep fallback behavior while surfacing root causes
+- Frontend: show safe user-facing fallback text on API/network failures
 
-- Never import `torch` or `onnxruntime` before `setup_env.setup_cuda_dlls()`.
-- Never commit absolute paths in shared/library code; `__main__` blocks and standalone test scripts are the only accepted exceptions.
-- Never add per-component CSS files; use Tailwind utilities only.
-- Never commit `.env`, PDFs, model binaries, or `backend/bin/` contents.
-- Never use `except: pass`; always log or surface the error.
-- Never use TypeScript suppression patterns in this JS project.
-- Never add new npm dependencies without first checking `lucide-react` and existing dependencies.
-- Never rely on Cursor or Copilot config files here; none exist in the repo.
+---
+
+## 6) Verification Checklist
+Before edits:
+- Confirm target app (`backend/` vs `frontend/`)
+- Check nearest subtree AGENTS guide for local constraints
+- Confirm command context (repo root vs `frontend/`)
+After edits:
+- Frontend: run `npm run lint` (and `npm run build` when build-affecting)
+- Backend: run affected scripts and relevant `backend/tests/test_*.py` files
+- Cross-app changes: verify both sides touched by the change
+
+## 7) Anti-Patterns to Avoid
+- Assuming pytest selector workflows (`-k`, markers) without evidence
+- Breaking CUDA/ONNX/TensorRT initialization ordering
+- Introducing non-Tailwind styling patterns that conflict with existing UI
+- Committing secrets (`.env`) or heavy generated/model artifacts
+
+## 8) Quick Pointers
+- API/chat streaming: `backend/main.py`
+- Vector retrieval manager: `backend/services/vector_store.py`
+- CUDA/TensorRT setup: `backend/core/setup_env.py`
+- Frontend SSE chat flow: `frontend/src/components/ChatInterface.jsx`
+- Citation UI card: `frontend/src/components/ReferenceCard.jsx`
+
+## 9) Maintenance Rule
+When build/lint/test scripts, architecture, or runtime assumptions change,
+update this file in the same PR so future agents receive accurate guidance.

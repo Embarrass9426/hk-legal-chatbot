@@ -46,15 +46,12 @@ class VectorStoreManager:
             "no",
         }
 
-        # Initialize Embeddings via Singleton Service
-        # This will auto-load the model if not already loaded
-        print("[VectorStore] connecting to EmbeddingService...")
-        self.embeddings = get_embedding_service()
+        self._get_embedding_service = get_embedding_service
+        self._get_reranker_service = get_reranker_service
 
-        self.reranker = None
+        print("[VectorStore] EmbeddingService configured for lazy loading")
         if self.enable_reranker:
-            print("[VectorStore] connecting to RerankerService...")
-            self.reranker = get_reranker_service()
+            print("[VectorStore] RerankerService configured for lazy loading")
         else:
             print("[VectorStore] Reranker disabled by ENABLE_RERANKER=0")
 
@@ -82,9 +79,20 @@ class VectorStoreManager:
 
         self.vector_store = PineconeVectorStore(
             index_name=self.index_name,
-            embedding=self.embeddings,
+            embedding=self._get_embedding_service(),  # pyright: ignore[reportArgumentType]
             pinecone_api_key=self.api_key,
+            text_key="content",
         )
+
+    @property
+    def embeddings(self) -> Any:
+        return self._get_embedding_service()
+
+    @property
+    def reranker(self) -> Any:
+        if not self.enable_reranker:
+            return None
+        return self._get_reranker_service()
 
     def _validate_query_vector(self, vector: List[float]):
         if len(vector) != self.expected_dimension:
@@ -101,7 +109,7 @@ class VectorStoreManager:
             raise ValueError("Query embedding norm is zero/near-zero.")
 
     def _enforce_precision_regime(self):
-        probe = self.index.query(
+        probe: Any = self.index.query(
             vector=[1.0 / self.expected_dimension] * self.expected_dimension,
             top_k=10,
             include_metadata=True,
@@ -225,12 +233,12 @@ class VectorStoreManager:
         index = self.pc.Index(self.index_name)
 
         for doc_id, section_id in sections_to_fetch:
-            query_filter = {
+            query_filter: Any = {
                 "doc_id": {"$eq": doc_id},
                 "section_id": {"$eq": section_id},
             }
 
-            section_results = index.query(
+            section_results: Any = index.query(
                 vector=[1.0 / self.expected_dimension] * self.expected_dimension,
                 filter=query_filter,
                 top_k=100,
@@ -274,7 +282,7 @@ class VectorStoreManager:
         query_vector = self.embeddings.embed_query(query_with_prefix)
         self._validate_query_vector(query_vector)
 
-        matches = self.index.query(
+        matches: Any = self.index.query(
             vector=query_vector,
             top_k=k,
             include_metadata=True,

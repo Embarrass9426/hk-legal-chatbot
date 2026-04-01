@@ -4,6 +4,19 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ReferenceCard from './ReferenceCard';
 
+const SESSION_STORAGE_KEY = 'hk-legal-chatbot-session-id';
+
+const getOrCreateSessionId = () => {
+  const existing = window.localStorage.getItem(SESSION_STORAGE_KEY);
+  if (existing && existing.trim()) {
+    return existing;
+  }
+
+  const generated = `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  window.localStorage.setItem(SESSION_STORAGE_KEY, generated);
+  return generated;
+};
+
 const ChatInterface = ({ darkMode, toggleDarkMode }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -51,7 +64,11 @@ const ChatInterface = ({ darkMode, toggleDarkMode }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: input, language: language }),
+        body: JSON.stringify({
+          message: input,
+          language: language,
+          session_id: getOrCreateSessionId(),
+        }),
       });
 
       if (!response.ok) {
@@ -85,38 +102,35 @@ const ChatInterface = ({ darkMode, toggleDarkMode }) => {
           const trimmedLine = line.trim();
           if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
           
-          try {
-            const data = JSON.parse(trimmedLine.slice(6));
-            if (data.references) {
-              setMessages(prev => {
-                const newMessages = [...prev];
-                const lastMsg = newMessages[newMessages.length - 1];
-                if (lastMsg.id === 'streaming-msg') {
-                  newMessages[newMessages.length - 1] = { 
-                    ...lastMsg, 
-                    references: data.references 
-                  };
-                }
-                return newMessages;
-              });
-            } else if (data.answer) {
-              accumulatedContent += data.answer;
-              setMessages(prev => {
-                const newMessages = [...prev];
-                const lastMsg = newMessages[newMessages.length - 1];
-                if (lastMsg.id === 'streaming-msg') {
-                  newMessages[newMessages.length - 1] = { 
-                    ...lastMsg, 
-                    content: accumulatedContent 
-                  };
-                }
-                return newMessages;
-              });
-            } else if (data.error) {
-              throw new Error(data.error);
-            }
-          } catch (e) {
-            console.error('Error parsing stream chunk:', e, trimmedLine);
+          const data = JSON.parse(trimmedLine.slice(6));
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          if (data.references) {
+            setMessages(prev => {
+              const newMessages = [...prev];
+              const lastMsg = newMessages[newMessages.length - 1];
+              if (lastMsg.id === 'streaming-msg') {
+                newMessages[newMessages.length - 1] = {
+                  ...lastMsg,
+                  references: data.references
+                };
+              }
+              return newMessages;
+            });
+          } else if (data.answer) {
+            accumulatedContent += data.answer;
+            setMessages(prev => {
+              const newMessages = [...prev];
+              const lastMsg = newMessages[newMessages.length - 1];
+              if (lastMsg.id === 'streaming-msg') {
+                newMessages[newMessages.length - 1] = {
+                  ...lastMsg,
+                  content: accumulatedContent
+                };
+              }
+              return newMessages;
+            });
           }
         }
       }

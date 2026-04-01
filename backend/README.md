@@ -56,6 +56,7 @@ python backend\scripts\ingest_pdfs.py --cap 282 599A
 python backend\tests\test_dll.py
 python backend\tests\test_embedding_similarity.py
 python backend\tests\test_tensorrt_embedding.py
+python backend\scripts\ollama_discover.py
 ```
 
 ## Windows + WSL split workflow (recommended)
@@ -72,6 +73,40 @@ Rename-Item .venv .venv_wsl_backup
 py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r backend\requirements.txt
+```
+
+## Find reachable Ollama endpoint from WSL
+
+If `python backend/llm_evaluate.py` fails at Ollama `/api/tags` preflight, run:
+
+```bash
+python backend/scripts/ollama_discover.py
+```
+
+This probes all runtime candidates (configured URL + WSL/host fallbacks) and prints the first reachable endpoint.
+
+Copy the exact printed command line:
+
+```bash
+export OLLAMA_BASE_URL='http://...:11434'
+```
+
+Then export the discovered endpoint:
+
+```bash
+export OLLAMA_BASE_URL=http://<reachable-host>:11434
+```
+
+Optional host override used by runtime candidate expansion:
+
+```bash
+export OLLAMA_HOST_GATEWAY=<reachable-host>
+```
+
+Re-run eval afterward:
+
+```bash
+python backend/llm_evaluate.py
 ```
 
 ## API Endpoints

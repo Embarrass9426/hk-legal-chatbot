@@ -1,5 +1,6 @@
 import os
 import sys
+import gc
 import threading
 import time
 import warnings
@@ -39,6 +40,9 @@ class EmbeddingService:
     _instance = None
     _init_lock = threading.Lock()
     _bootstrap_lock = threading.Lock()
+    _embed_lock: threading.Lock
+    _initialized: bool
+    _model_loaded: bool
 
     def __new__(cls):
         if cls._instance is None:
@@ -57,6 +61,9 @@ class EmbeddingService:
         return cls._instance
 
     def __init__(self):
+        if not hasattr(self, "_embed_lock"):
+            self._embed_lock = threading.Lock()
+
         if self._initialized:
             return
 
@@ -95,8 +102,31 @@ class EmbeddingService:
             self.trt_auxiliary_streams = int(
                 os.getenv("EMBEDDING_TRT_AUX_STREAMS", "0")
             )
-            self._load_model()
+            self._model_loaded = False
             self._initialized = True
+
+    def ensure_loaded(self):
+        if self._model_loaded:
+            return
+
+        with self._bootstrap_lock:
+            if self._model_loaded:
+                return
+            self._load_model()
+            self._model_loaded = True
+
+    def is_loaded(self) -> bool:
+        return self._model_loaded
+
+    def unload(self):
+        with self._bootstrap_lock:
+            self.model = None
+            self.tokenizer = None
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            self._model_loaded = False
+            print("[EmbeddingService] Model unloaded.")
 
     def _get_model_path(self) -> str:
         # Resolve path relative to this file: backend/services/embedding_service.py
@@ -201,8 +231,9 @@ class EmbeddingService:
         )
 
         # Log active providers
-        if hasattr(self.model, "model"):
-            active_providers = self.model.model.get_providers()
+        model_backend = getattr(self.model, "model", None)
+        if model_backend is not None and hasattr(model_backend, "get_providers"):
+            active_providers = model_backend.get_providers()
             print(f"[EmbeddingService] Active Providers: {active_providers}")
 
             if (
@@ -230,13 +261,16 @@ class EmbeddingService:
         print(
             "[EmbeddingService] FP16 instability detected. Switching TensorRT to FP32."
         )
+        self.unload()
         self._active_fp16 = False
-        self._load_model()
+        self.ensure_loaded()
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """
         Embed a list of texts. Thread-safe.
         """
+        self.ensure_loaded()
+
         # Handle empty/whitespace texts to prevent crashes
         clean_texts = [t if t.strip() else "." for t in texts]
 
@@ -254,10 +288,16 @@ class EmbeddingService:
         MAX_RETRIES = 3
         RETRY_DELAY = [0.5, 1.0, 2.0]  # Exponential backoff
 
+        if self.tokenizer is None or self.model is None:
+            raise RuntimeError("Embedding model is not loaded.")
+
+        tokenizer = self.tokenizer
+        model = self.model
+
         for attempt in range(MAX_RETRIES):
             try:
                 # Tokenize
-                inputs = self.tokenizer(
+                inputs = tokenizer(
                     texts,
                     padding=True,
                     truncation=True,
@@ -275,7 +315,7 @@ class EmbeddingService:
 
                 # Inference
                 with torch.no_grad():
-                    outputs = self.model(**inputs)
+                    outputs = model(**inputs)
 
                 # Mean Pooling
                 last_hidden = outputs.last_hidden_state.detach().cpu()
@@ -367,6 +407,8 @@ class EmbeddingService:
                     else:
                         # Non-transient error (e.g., all-zero embeddings) - fail immediately
                         raise
+
+        raise RuntimeError("Embedding failed after retries.")
 
 
 # Global singleton accessor

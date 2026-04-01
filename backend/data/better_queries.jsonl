@@ -1,0 +1,25 @@
+[
+  {"id":"cl_1","query":"Got a police notice for questioning. Should I hire a lawyer first? What happens if I don't go?","scenario":"Criminal Law"},
+  {"id":"cl_2","query":"Selling second-hand items online and accused of money laundering by police. Account frozen, what to do?","scenario":"Criminal Law"},
+  {"id":"cl_3","query":"Fought with someone and they're in hospital. Police say I'll be charged with assault. Difference between pleading guilty and not guilty?","scenario":"Criminal Law"},
+
+  {"id":"cv_1","query":"Friend borrowed $100k and won't pay back. Only have WeChat records, no IOU. What are my chances in court?","scenario":"Civil Litigation"},
+  {"id":"cv_2","query":"Received a lawyer's letter for debt I don't remember. Will I lose by default if I don't reply?","scenario":"Civil Litigation"},
+  {"id":"cv_3","query":"How to fill in Small Claims Tribunal forms? Can I sue if the defendant lives in Mainland China?","scenario":"Civil Litigation"},
+
+  {"id":"mf_1","query":"Husband has an affair but refuses divorce. How long do we need to be separated for unilateral application?","scenario":"Matrimonial & Family"},
+  {"id":"mf_2","query":"Ex-husband suddenly stopped paying alimony, claiming he's unemployed. How to force him to pay?","scenario":"Matrimonial & Family"},
+  {"id":"mf_3","query":"Fighting for custody. The other side says I'm a housewife with no income and unfit. How does the judge see this?","scenario":"Matrimonial & Family"},
+
+  {"id":"lr_1","query":"Suddenly fired during probation without notice. Employer says no notice or compensation needed. Is this true?","scenario":"Labor Rights"},
+  {"id":"lr_2","query":"Working long OT hours but contract says no OT pay. Can I claim overtime pay under labor law?","scenario":"Labor Rights"},
+  {"id":"lr_3","query":"Fired after becoming pregnant with performance as excuse. How to complain about discrimination to Labour Dept?","scenario":"Labor Rights"},
+
+  {"id":"ta_1","query":"Settled a traffic accident privately on the spot, but now have back pain. The other party claims I'm faking. What to do?","scenario":"Traffic Accidents"},
+  {"id":"ta_2","query":"Hit by a car while crossing the road. Driver has no insurance. Can I claim from Motor Insurers' Bureau?","scenario":"Traffic Accidents"},
+  {"id":"ta_3","query":"I hit someone but their claim amount is outrageous. Insurance company told me to handle it myself. What to do?","scenario":"Traffic Accidents"},
+
+  {"id":"pl_1","query":"Upstairs neighbor has a chronic leak and won't fix it. Management says it's not their business. How to sue for mandatory repairs?","scenario":"Property Law"},
+  {"id":"pl_2","query":"Found appliances missing after closing the deal. It was sold with furniture. How to claim back?","scenario":"Property Law"},
+  {"id":"pl_3","query":"Agent didn't disclose the unit was a 'haunted house'. Found out after signing agreement. Can I back out?","scenario":"Property Law"}
+]
