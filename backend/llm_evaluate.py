@@ -24,9 +24,16 @@ setup_env.setup_cuda_dlls()
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from backend.services.vector_store import VectorStoreManager
-from backend.core.utils import rewrite_query
+from backend.core.utils import (
+    rewrite_query,
+    generate_hyde_embeddings,
+    generate_multi_hyde_passages,
+)
 
 load_dotenv()
+load_dotenv(
+    dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+)
 
 
 async def verify_ollama_connectivity(model_name: str, ollama_base_url: str) -> None:
@@ -473,15 +480,18 @@ Task: Evaluate how relevant the retrieved documents are for answering the user's
 Scoring Criteria (0.0–10.0):
 - 0–2: Completely irrelevant documents
 - 3–4: Mostly irrelevant, minimal useful information
-- 5–6: Some relevant content but mixed with irrelevant material
-- 7–8: Mostly relevant, useful for answering the query
-- 9–10: Highly relevant, directly contains the information needed to answer the query
+- 5–6: Some relevant content with noticeable noise, but still materially useful
+- 7–8: Mostly relevant with enough legal basis to support a good answer
+- 9–10: Highly relevant, directly contains the key information needed to answer the query
 
 Evaluation Guidelines:
 - Focus only on the usefulness of the retrieved documents for answering the query
 - Do NOT evaluate the assistant's response here
-- Penalize noise, redundancy, or missing key information
-- Reward concise, targeted, and information-rich retrieval
+- Penalize noise, redundancy, or missing key information proportionally (avoid all-or-nothing penalties)
+- Reward retrieval that contains at least one strong legal anchor (e.g., relevant ordinance/section),
+  even when some additional context is mixed in
+- Reward retrieval that provides comprehensive coverage of the query's legal aspects, even if not perfectly focused, 
+  and you think you can extract a good answer from it
 """
     user_prompt = (
         f"User Query: {query}\n\n"
@@ -577,17 +587,21 @@ async def evaluate_no_rag_baseline(
     reference_context: str,
     llm: ChatOpenAI,
     semaphore: asyncio.Semaphore,
+    timeout_seconds: int = 300,
 ) -> Dict[str, Any]:
     async def _limited_call(coro):
         async with semaphore:
             return await coro
 
-    relevance, helpfulness, groundedness_vs_docs = await asyncio.gather(
-        _limited_call(judge_relevance(query, no_rag_answer, llm)),
-        _limited_call(judge_helpfulness(query, no_rag_answer, llm)),
-        _limited_call(
-            judge_groundedness_vs_docs(no_rag_answer, reference_context, llm)
+    relevance, helpfulness, groundedness_vs_docs = await asyncio.wait_for(
+        asyncio.gather(
+            _limited_call(judge_relevance(query, no_rag_answer, llm)),
+            _limited_call(judge_helpfulness(query, no_rag_answer, llm)),
+            _limited_call(
+                judge_groundedness_vs_docs(no_rag_answer, reference_context, llm)
+            ),
         ),
+        timeout=timeout_seconds,
     )
     avg_score = (
         relevance["score"] + helpfulness["score"] + groundedness_vs_docs["score"]
@@ -608,17 +622,21 @@ async def evaluate_strategy(
     llm: ChatOpenAI,
     semaphore: asyncio.Semaphore,
     rewritten_query: str = "",
+    timeout_seconds: int = 300,
 ) -> Dict[str, Any]:
     async def _limited_call(coro):
         async with semaphore:
             return await coro
 
-    relevance, groundedness, retrieval_relevance = await asyncio.gather(
-        _limited_call(judge_relevance(query, answer, llm)),
-        _limited_call(judge_groundedness(answer, context_text, llm)),
-        _limited_call(
-            judge_retrieval_relevance(rewritten_query or query, context_text, llm)
+    relevance, groundedness, retrieval_relevance = await asyncio.wait_for(
+        asyncio.gather(
+            _limited_call(judge_relevance(query, answer, llm)),
+            _limited_call(judge_groundedness(answer, context_text, llm)),
+            _limited_call(
+                judge_retrieval_relevance(rewritten_query or query, context_text, llm)
+            ),
         ),
+        timeout=timeout_seconds,
     )
     avg_score = (
         relevance["score"] + groundedness["score"] + retrieval_relevance["score"]
@@ -647,14 +665,34 @@ def make_failed_strategy_result(error_message: str) -> Dict[str, Any]:
     }
 
 
+def make_partial_strategy_result(
+    error_message: str,
+    sections: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    failed_score = {"score": 0, "reasoning": error_message}
+    serialized_sections = _serialize_retrieved_sections(sections)
+    return {
+        "answer": "",
+        "num_sources": len(sections),
+        "retrieved_sections": serialized_sections,
+        "source_usefulness": [],
+        "scores": {
+            "relevance": failed_score,
+            "groundedness": failed_score,
+            "retrieval_relevance": failed_score,
+            "avg_score": 0,
+        },
+    }
+
+
 def compute_strategy_summary(
     details: List[Dict[str, Any]],
-) -> Dict[str, Dict[str, float]]:
+) -> Dict[str, Dict[str, Any]]:
     strategy_names = set()
     for item in details:
         strategy_names.update(item.get("strategies", {}).keys())
     strategy_names = sorted(strategy_names)
-    summary: Dict[str, Dict[str, float]] = {}
+    summary: Dict[str, Dict[str, Any]] = {}
 
     for strategy in strategy_names:
         relevance_scores: List[float] = []
@@ -700,12 +738,57 @@ def compute_strategy_summary(
             )
         summary[strategy] = strat_summary
 
+    baseline = summary.get("no_rag_baseline", {})
+    baseline_groundedness = float(baseline.get("avg_groundedness_vs_docs", 0.0))
+
+    for strategy, strat_summary in summary.items():
+        if strategy == "no_rag_baseline":
+            strat_summary["increased_performance"] = {
+                "role": "baseline",
+                "reference_metric": "avg_groundedness_vs_docs",
+                "reference_score": round(baseline_groundedness, 1),
+            }
+            continue
+
+        target_retrieval_relevance = float(
+            strat_summary.get("avg_retrieval_relevance", 0.0)
+        )
+        absolute_delta = round(
+            target_retrieval_relevance - baseline_groundedness,
+            1,
+        )
+        increase_percentage = None
+        if baseline_groundedness > 0:
+            increase_percentage = round(
+                (
+                    (target_retrieval_relevance - baseline_groundedness)
+                    / baseline_groundedness
+                )
+                * 100,
+                1,
+            )
+
+        strat_summary["increased_performance"] = {
+            "reference_strategy": "no_rag_baseline",
+            "reference_metric": "avg_groundedness_vs_docs",
+            "target_metric": "avg_retrieval_relevance",
+            "reference_score": round(baseline_groundedness, 1),
+            "target_score": round(target_retrieval_relevance, 1),
+            "absolute_delta": absolute_delta,
+            "increase_percentage": increase_percentage,
+            "is_comparable": baseline_groundedness > 0,
+            "interpretation": (
+                "Proxy metric only: compares source helpfulness signal against "
+                "no-RAG grounding baseline; not a direct hallucination-rate metric."
+            ),
+        }
+
     return summary
 
 
 def compute_scenario_summary(
     details: List[Dict[str, Any]],
-) -> Dict[str, Dict[str, Dict[str, float]]]:
+) -> Dict[str, Dict[str, Dict[str, Any]]]:
     grouped: Dict[str, List[Dict[str, Any]]] = {}
 
     for item in details:
@@ -714,7 +797,7 @@ def compute_scenario_summary(
             grouped[scenario] = []
         grouped[scenario].append(item)
 
-    summary: Dict[str, Dict[str, Dict[str, float]]] = {}
+    summary: Dict[str, Dict[str, Dict[str, Any]]] = {}
     for scenario in sorted(grouped.keys()):
         summary[scenario] = compute_strategy_summary(grouped[scenario])
 
@@ -734,8 +817,18 @@ def compute_retrieval_summary(details: List[Dict[str, Any]]) -> Dict[str, Any]:
     source_counts: List[int] = []
     unique_doc_counts: List[int] = []
 
+    preferred_strategy = "hyde_reranked"
+
     for item in details:
-        strategy_data = item.get("strategies", {}).get("plain_vector", {})
+        strategies_map = item.get("strategies", {})
+        strategy_data = strategies_map.get(preferred_strategy)
+        if not strategy_data:
+            for key in strategies_map.keys():
+                if key.startswith("hyde_reranked"):
+                    strategy_data = strategies_map.get(key)
+                    break
+        if not strategy_data:
+            strategy_data = item.get("strategies", {}).get("plain_vector", {})
         retrieved_sections = strategy_data.get("retrieved_sections", [])
         source_counts.append(int(strategy_data.get("num_sources", 0)))
 
@@ -751,6 +844,74 @@ def compute_retrieval_summary(details: List[Dict[str, Any]]) -> Dict[str, Any]:
         "num_queries": num_queries,
         "avg_num_sources": round(sum(source_counts) / num_queries, 2),
         "avg_unique_docs": round(sum(unique_doc_counts) / num_queries, 2),
+    }
+
+
+def compute_reranker_comparison_summary(
+    strategy_summary: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    reranker_keys = sorted(
+        [key for key in strategy_summary.keys() if key.startswith("hyde_reranked__")]
+    )
+    if len(reranker_keys) < 2:
+        return {}
+
+    baseline_key = next(
+        (key for key in reranker_keys if "zerank" in key.lower()),
+        reranker_keys[0],
+    )
+    baseline = strategy_summary.get(baseline_key, {})
+
+    comparisons = []
+    for key in reranker_keys:
+        if key == baseline_key:
+            continue
+
+        current = strategy_summary.get(key, {})
+        comparisons.append(
+            {
+                "strategy": key,
+                "baseline": baseline_key,
+                "delta_retrieval_relevance": round(
+                    float(current.get("avg_retrieval_relevance", 0.0))
+                    - float(baseline.get("avg_retrieval_relevance", 0.0)),
+                    1,
+                ),
+                "delta_overall": round(
+                    float(current.get("avg_overall", 0.0))
+                    - float(baseline.get("avg_overall", 0.0)),
+                    1,
+                ),
+                "delta_relevance": round(
+                    float(current.get("avg_relevance", 0.0))
+                    - float(baseline.get("avg_relevance", 0.0)),
+                    1,
+                ),
+                "delta_groundedness": round(
+                    float(current.get("avg_groundedness", 0.0))
+                    - float(baseline.get("avg_groundedness", 0.0)),
+                    1,
+                ),
+            }
+        )
+
+    best_by_retrieval = max(
+        reranker_keys,
+        key=lambda key: float(
+            strategy_summary.get(key, {}).get("avg_retrieval_relevance", 0.0)
+        ),
+    )
+    best_by_overall = max(
+        reranker_keys,
+        key=lambda key: float(strategy_summary.get(key, {}).get("avg_overall", 0.0)),
+    )
+
+    return {
+        "baseline": baseline_key,
+        "strategies": reranker_keys,
+        "best_by_retrieval_relevance": best_by_retrieval,
+        "best_by_overall": best_by_overall,
+        "comparisons": comparisons,
     }
 
 
@@ -979,14 +1140,39 @@ def build_sources_report(
 
 
 def load_queries(queries_path: str) -> List[Dict[str, Any]]:
-    queries: List[Dict[str, Any]] = []
     with open(queries_path, "r", encoding="utf-8") as file:
-        for line in file:
-            line = line.strip()
-            if not line:
-                continue
-            queries.append(json.loads(line))
+        raw = file.read().strip()
+    if not raw:
+        return []
+    # JSON array (e.g. better_queries.jsonl which is actually JSON)
+    if raw.startswith("["):
+        parsed = json.loads(raw)
+        if not isinstance(parsed, list):
+            raise ValueError(
+                f"Expected JSON array in {queries_path}, got {type(parsed).__name__}"
+            )
+        return parsed
+    # JSONL (one JSON object per line)
+    queries: List[Dict[str, Any]] = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        queries.append(json.loads(line))
     return queries
+
+
+def filter_queries_by_id_pattern(
+    queries: List[Dict[str, Any]],
+    pattern: str,
+) -> List[Dict[str, Any]]:
+    compiled = re.compile(pattern)
+    filtered: List[Dict[str, Any]] = []
+    for item in queries:
+        query_id = _safe_str(item.get("id", ""), "")
+        if compiled.fullmatch(query_id):
+            filtered.append(item)
+    return filtered
 
 
 def resolve_eval_paths(base_dir: str) -> Dict[str, str]:
@@ -1062,9 +1248,108 @@ def configure_precision_mode_for_eval() -> None:
     )
 
 
+def configure_reranker_runtime_for_eval() -> None:
+    force_cpu = os.getenv("HK_LEGAL_EVAL_RERANKER_FORCE_CPU", "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if force_cpu:
+        os.environ["RERANKER_FORCE_CPU"] = "1"
+        os.environ["RERANKER_REQUIRE_TENSORRT"] = "0"
+        print(
+            "[Eval] Reranker runtime configured for CPU (RERANKER_FORCE_CPU=1, "
+            "RERANKER_REQUIRE_TENSORRT=0)."
+        )
+    else:
+        require_trt = os.getenv(
+            "HK_LEGAL_EVAL_RERANKER_REQUIRE_TENSORRT", "0"
+        ).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        os.environ["RERANKER_FORCE_CPU"] = "0"
+        os.environ["RERANKER_REQUIRE_TENSORRT"] = "1" if require_trt else "0"
+        print(
+            "[Eval] Reranker runtime configured for TRT attempt "
+            f"(RERANKER_FORCE_CPU=0, RERANKER_REQUIRE_TENSORRT={os.environ['RERANKER_REQUIRE_TENSORRT']})."
+        )
+
+
+def configure_trt_workspace_for_eval() -> None:
+    eval_embedding_workspace = int(
+        os.getenv("HK_LEGAL_EVAL_EMBEDDING_TRT_MAX_WORKSPACE_SIZE", str(3 * 1024**3))
+    )
+    eval_reranker_workspace = int(
+        os.getenv("HK_LEGAL_EVAL_RERANKER_TRT_MAX_WORKSPACE_SIZE", str(1 * 1024**3))
+    )
+
+    os.environ["EMBEDDING_TRT_MAX_WORKSPACE_SIZE"] = str(eval_embedding_workspace)
+    os.environ["RERANKER_TRT_MAX_WORKSPACE_SIZE"] = str(eval_reranker_workspace)
+
+    print(
+        "[Eval] TRT workspaces configured: "
+        f"EMBEDDING_TRT_MAX_WORKSPACE_SIZE={eval_embedding_workspace}, "
+        f"RERANKER_TRT_MAX_WORKSPACE_SIZE={eval_reranker_workspace}."
+    )
+
+
 async def _run_with_semaphore(semaphore: asyncio.Semaphore, coro):
     async with semaphore:
         return await coro
+
+
+async def _run_with_timeout(coro, timeout_seconds: int, label: str):
+    if timeout_seconds <= 0:
+        return await coro
+    try:
+        return await asyncio.wait_for(coro, timeout=timeout_seconds)
+    except asyncio.TimeoutError as exc:
+        raise TimeoutError(f"{label} timed out after {timeout_seconds}s") from exc
+
+
+async def _run_blocking_with_timeout(
+    func, timeout_seconds: int, label: str, *args, **kwargs
+):
+    if timeout_seconds <= 0:
+        return await asyncio.to_thread(func, *args, **kwargs)
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(func, *args, **kwargs),
+            timeout=timeout_seconds,
+        )
+    except asyncio.TimeoutError as exc:
+        raise TimeoutError(f"{label} timed out after {timeout_seconds}s") from exc
+
+
+def _parse_reranker_variants(raw: str) -> List[Tuple[str, str, str]]:
+    variants: List[Tuple[str, str, str]] = []
+    for token in [part.strip() for part in raw.split(",") if part.strip()]:
+        if ":" not in token:
+            continue
+        model_dir, onnx_file = token.split(":", 1)
+        model_dir = model_dir.strip()
+        onnx_file = onnx_file.strip()
+        if not model_dir or not onnx_file:
+            continue
+        alias = re.sub(r"[^a-zA-Z0-9_\-]+", "_", model_dir)
+        variants.append((alias, model_dir, onnx_file))
+    return variants
+
+
+def _resolve_existing_reranker_variants(
+    base_dir: str,
+    variants: List[Tuple[str, str, str]],
+) -> List[Tuple[str, str, str]]:
+    resolved: List[Tuple[str, str, str]] = []
+    for alias, model_dir, onnx_file in variants:
+        onnx_path = os.path.join(base_dir, "models", model_dir, onnx_file)
+        if os.path.exists(onnx_path):
+            resolved.append((alias, model_dir, onnx_file))
+        else:
+            print(f"[Eval] Skipping missing reranker variant: {model_dir}:{onnx_file}")
+    return resolved
 
 
 def _serialize_retrieved_sections(
@@ -1088,7 +1373,8 @@ def _serialize_retrieved_sections(
 
 
 async def run_evaluation() -> None:
-    vector_top_k = int(os.getenv("HK_LEGAL_EVAL_VECTOR_TOP_K", "5"))
+    vector_top_k = int(os.getenv("HK_LEGAL_EVAL_VECTOR_TOP_K", "50"))
+    rerank_top_k = int(os.getenv("HK_LEGAL_EVAL_RERANK_TOP_K", "10"))
     model_name = os.getenv("HK_LEGAL_EVAL_MODEL", "qwen3.5:9b")
     judge_model_name = os.getenv("HK_LEGAL_EVAL_JUDGE_MODEL", "deepseek-chat")
     ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
@@ -1099,6 +1385,14 @@ async def run_evaluation() -> None:
         "yes",
     }
     max_concurrent_llm = int(os.getenv("HK_LEGAL_EVAL_LLM_CONCURRENCY", "6"))
+    hyde_timeout_seconds = int(os.getenv("HK_LEGAL_EVAL_HYDE_TIMEOUT_SECONDS", "180"))
+    retrieval_timeout_seconds = int(
+        os.getenv("HK_LEGAL_EVAL_RETRIEVAL_TIMEOUT_SECONDS", "180")
+    )
+    answer_timeout_seconds = int(
+        os.getenv("HK_LEGAL_EVAL_ANSWER_TIMEOUT_SECONDS", "300")
+    )
+    judge_timeout_seconds = int(os.getenv("HK_LEGAL_EVAL_JUDGE_TIMEOUT_SECONDS", "300"))
     skip_source_usefulness = os.getenv(
         "HK_LEGAL_EVAL_SKIP_SOURCE_USEFULNESS", "1"
     ).strip().lower() in {
@@ -1113,6 +1407,26 @@ async def run_evaluation() -> None:
         "true",
         "yes",
     }
+    include_classic_vector_strategies = os.getenv(
+        "HK_LEGAL_EVAL_INCLUDE_CLASSIC_VECTOR_STRATEGIES", "0"
+    ).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    include_multi_hyde = os.getenv(
+        "HK_LEGAL_EVAL_INCLUDE_MULTI_HYDE", "1"
+    ).strip().lower() not in {
+        "0",
+        "false",
+        "no",
+    }
+    multi_hyde_k_per_query = max(
+        1, int(os.getenv("HK_LEGAL_EVAL_MULTI_HYDE_K_PER_QUERY", "3"))
+    )
+    multi_hyde_rerank_top_k = max(
+        1, int(os.getenv("HK_LEGAL_EVAL_MULTI_HYDE_RERANK_TOP_K", "5"))
+    )
     semaphore = asyncio.Semaphore(max_concurrent_llm)
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1131,6 +1445,8 @@ async def run_evaluation() -> None:
         )
 
     queries = load_queries(queries_path)
+    query_id_pattern = os.getenv("HK_LEGAL_EVAL_QUERY_ID_PATTERN", r"q\d+_1")
+    queries = filter_queries_by_id_pattern(queries, query_id_pattern)
     num_queries = len(queries)
     output_json_stdout = os.getenv(
         "HK_LEGAL_EVAL_STDOUT_JSON", "0"
@@ -1141,10 +1457,21 @@ async def run_evaluation() -> None:
     }
 
     if not progress_only:
-        print(f"[Eval] Loaded {num_queries} queries from {queries_path}")
+        print(
+            f"[Eval] Loaded {num_queries} queries from {queries_path} "
+            f"using query_id pattern: {query_id_pattern}"
+        )
+
+    if num_queries == 0:
+        raise ValueError(
+            "No queries selected for evaluation. "
+            f"Check HK_LEGAL_EVAL_QUERY_ID_PATTERN={query_id_pattern!r}."
+        )
 
     configure_embedding_runtime_for_eval()
     configure_precision_mode_for_eval()
+    configure_trt_workspace_for_eval()
+    configure_reranker_runtime_for_eval()
 
     deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
     if not deepseek_api_key:
@@ -1168,11 +1495,44 @@ async def run_evaluation() -> None:
     embedding_service.ensure_loaded()
 
     details: List[Dict[str, Any]] = []
-    strategies = [
-        "plain_vector",
-        "rewritten_vector",
-        "rewritten_expanded",
-    ]
+    compare_rerankers = os.getenv(
+        "HK_LEGAL_EVAL_COMPARE_RERANKERS", "0"
+    ).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    reranker_variants_raw = os.getenv(
+        "HK_LEGAL_EVAL_RERANKER_VARIANTS",
+        "zerank-1-small:model_fp16.onnx",
+    )
+    reranker_variants = _resolve_existing_reranker_variants(
+        base_dir,
+        _parse_reranker_variants(reranker_variants_raw),
+    )
+
+    if not reranker_variants:
+        default_model_dir = os.getenv("RERANKER_MODEL_DIR", "zerank-1-small")
+        default_onnx_file = os.getenv("RERANKER_ONNX_FILE", "model_fp16.onnx")
+        reranker_variants = [("default", default_model_dir, default_onnx_file)]
+
+    strategies: List[str] = []
+    if compare_rerankers and reranker_variants:
+        for alias, _, _ in reranker_variants:
+            strategies.append(f"hyde_reranked__{alias}")
+    else:
+        strategies.append("hyde_reranked")
+
+    if include_classic_vector_strategies:
+        strategies.extend(
+            [
+                "plain_vector",
+                "rewritten_vector",
+                "rewritten_expanded",
+            ]
+        )
+    if include_multi_hyde:
+        strategies.append("multi_hyde_reranked")
     if include_no_rag_baseline:
         strategies.append("no_rag_baseline")
     total_steps = num_queries * len(strategies)
@@ -1208,6 +1568,7 @@ async def run_evaluation() -> None:
                 try:
                     for strategy in strategies:
                         progress.set_postfix({"query": query_id, "strategy": strategy})
+                        sections: List[Dict[str, Any]] = []
                         if strategy == "no_rag_baseline":
                             no_rag_answer = await _run_with_semaphore(
                                 semaphore,
@@ -1217,8 +1578,19 @@ async def run_evaluation() -> None:
                                     ollama_base_url,
                                 ),
                             )
+                            hyde_ref_key = next(
+                                (
+                                    key
+                                    for key in query_result["strategies"].keys()
+                                    if key.startswith("hyde_reranked")
+                                ),
+                                "hyde_reranked",
+                            )
                             ref_strategy_data = query_result["strategies"].get(
-                                "rewritten_expanded", {}
+                                hyde_ref_key,
+                                query_result["strategies"].get(
+                                    "rewritten_expanded", {}
+                                ),
                             )
                             reference_context = ""
                             if ref_strategy_data:
@@ -1235,6 +1607,7 @@ async def run_evaluation() -> None:
                                 reference_context,
                                 judge_llm,
                                 semaphore,
+                                timeout_seconds=judge_timeout_seconds,
                             )
 
                             strategy_result = {
@@ -1248,7 +1621,75 @@ async def run_evaluation() -> None:
                             progress.update(1)
                             continue
                         try:
-                            if strategy == "plain_vector":
+                            if strategy.startswith("hyde_reranked"):
+                                reranker_service = vs_manager.reranker
+                                if reranker_service is None:
+                                    raise RuntimeError(
+                                        "Reranker is disabled (ENABLE_RERANKER=0), cannot run hyde_reranked strategy"
+                                    )
+
+                                strategy_model_dir = os.getenv(
+                                    "RERANKER_MODEL_DIR", "zerank-1-small"
+                                )
+                                strategy_onnx_file = os.getenv(
+                                    "RERANKER_ONNX_FILE", "model_fp16.onnx"
+                                )
+
+                                if strategy != "hyde_reranked":
+                                    alias = strategy.split("__", 1)[1]
+                                    matched_variant = next(
+                                        (
+                                            variant
+                                            for variant in reranker_variants
+                                            if variant[0] == alias
+                                        ),
+                                        None,
+                                    )
+                                    if matched_variant is not None:
+                                        _, strategy_model_dir, strategy_onnx_file = (
+                                            matched_variant
+                                        )
+
+                                reranker_service.configure_model(
+                                    model_dir_name=strategy_model_dir,
+                                    onnx_model_file=strategy_onnx_file,
+                                )
+
+                                try:
+                                    if progress_only:
+                                        print(
+                                            f"[Eval] {query_id}:{strategy} stage=hyde_embedding"
+                                        )
+                                    hyde_embedding = await _run_with_semaphore(
+                                        semaphore,
+                                        _run_with_timeout(
+                                            generate_hyde_embeddings(
+                                                query,
+                                                judge_llm,
+                                                embedding_service,
+                                            ),
+                                            hyde_timeout_seconds,
+                                            f"HyDE embedding for {query_id}",
+                                        ),
+                                    )
+                                    if progress_only:
+                                        print(
+                                            f"[Eval] {query_id}:{strategy} stage=retrieval_rerank"
+                                        )
+                                    results = await _run_blocking_with_timeout(
+                                        vs_manager.search_hyde_with_rerank_and_expansion,
+                                        retrieval_timeout_seconds,
+                                        f"Retrieval+rerank for {query_id}",
+                                        hyde_embedding=hyde_embedding,
+                                        original_query=query,
+                                        k=vector_top_k,
+                                        rerank_top_k=rerank_top_k,
+                                    )
+                                    sections = collapse_expanded_sections(results)
+                                finally:
+                                    if reranker_service.is_loaded():
+                                        reranker_service.unload()
+                            elif strategy == "plain_vector":
                                 results = vs_manager.search(query, k=vector_top_k)
                                 sections = collapse_documents_to_sections(results)
                             elif strategy == "rewritten_vector":
@@ -1262,21 +1703,87 @@ async def run_evaluation() -> None:
                                     k=vector_top_k,
                                 )
                                 sections = collapse_expanded_sections(results)
+                            elif strategy == "multi_hyde_reranked":
+                                reranker_service = vs_manager.reranker
+                                if reranker_service is None:
+                                    raise RuntimeError(
+                                        "Reranker is disabled (ENABLE_RERANKER=0), "
+                                        "cannot run multi_hyde_reranked strategy"
+                                    )
+
+                                reranker_service.configure_model(
+                                    model_dir_name=os.getenv(
+                                        "RERANKER_MODEL_DIR", "zerank-1-small"
+                                    ),
+                                    onnx_model_file=os.getenv(
+                                        "RERANKER_ONNX_FILE", "model_fp16.onnx"
+                                    ),
+                                )
+
+                                try:
+                                    if progress_only:
+                                        print(
+                                            f"[Eval] {query_id}:{strategy} stage=multi_hyde_generation"
+                                        )
+                                    multi_passages = await _run_with_semaphore(
+                                        semaphore,
+                                        _run_with_timeout(
+                                            generate_multi_hyde_passages(
+                                                query, judge_llm
+                                            ),
+                                            hyde_timeout_seconds,
+                                            f"Multi-HyDE generation for {query_id}",
+                                        ),
+                                    )
+
+                                    if not multi_passages:
+                                        raise RuntimeError(
+                                            "Multi-HyDE generation returned no usable passages"
+                                        )
+
+                                    if progress_only:
+                                        print(
+                                            f"[Eval] {query_id}:{strategy} stage=multi_retrieval_rerank "
+                                            f"passages={len(multi_passages)}"
+                                        )
+                                    results = await _run_blocking_with_timeout(
+                                        vs_manager.search_multi_hyde_with_rerank_and_expansion,
+                                        retrieval_timeout_seconds,
+                                        f"Multi-HyDE retrieval+rerank for {query_id}",
+                                        passages=multi_passages,
+                                        original_query=query,
+                                        k_per_query=multi_hyde_k_per_query,
+                                        rerank_top_k=multi_hyde_rerank_top_k,
+                                    )
+                                    sections = collapse_expanded_sections(results)
+                                finally:
+                                    if reranker_service.is_loaded():
+                                        reranker_service.unload()
                             else:
                                 raise ValueError(f"Unknown strategy: {strategy}")
 
                             context_text = build_context_text_from_sections(sections)
                             num_sources = len(sections)
+                            if progress_only:
+                                print(
+                                    f"[Eval] {query_id}:{strategy} stage=answer sources={num_sources}"
+                                )
                             answer = await _run_with_semaphore(
                                 semaphore,
-                                generate_ollama_answer(
-                                    query,
-                                    context_text,
-                                    model_name,
-                                    ollama_base_url,
+                                _run_with_timeout(
+                                    generate_ollama_answer(
+                                        query,
+                                        context_text,
+                                        model_name,
+                                        ollama_base_url,
+                                    ),
+                                    answer_timeout_seconds,
+                                    f"Answer generation for {query_id}",
                                 ),
                             )
 
+                            if progress_only:
+                                print(f"[Eval] {query_id}:{strategy} stage=judge")
                             scores = await evaluate_strategy(
                                 strategy,
                                 query,
@@ -1285,6 +1792,7 @@ async def run_evaluation() -> None:
                                 answer=answer,
                                 llm=judge_llm,
                                 semaphore=semaphore,
+                                timeout_seconds=judge_timeout_seconds,
                             )
 
                             if skip_source_usefulness:
@@ -1336,7 +1844,12 @@ async def run_evaluation() -> None:
                             if not progress_only:
                                 print(f"[Eval]   {err}")
 
-                            failed_result = make_failed_strategy_result(err)
+                            if sections:
+                                failed_result = make_partial_strategy_result(
+                                    err, sections
+                                )
+                            else:
+                                failed_result = make_failed_strategy_result(err)
                             query_result["strategies"][strategy] = failed_result
                         finally:
                             progress.update(1)
@@ -1351,26 +1864,39 @@ async def run_evaluation() -> None:
         "by_strategy": compute_strategy_summary(details),
         "by_scenario": compute_scenario_summary(details),
     }
+    reranker_comparison = compute_reranker_comparison_summary(summary["by_strategy"])
+    if reranker_comparison:
+        summary["reranker_comparison"] = reranker_comparison
 
     results = {
         "timestamp": timestamp,
         "config": {
             "eval_mode": eval_mode,
             "progress_only": progress_only,
+            "query_id_pattern": query_id_pattern,
             "vector_top_k": vector_top_k,
+            "rerank_top_k": rerank_top_k,
+            "compare_rerankers": compare_rerankers,
+            "reranker_variants": reranker_variants,
             "llm_model": model_name,
             "num_queries": num_queries,
             "max_concurrent_llm": max_concurrent_llm,
             "skip_source_usefulness": skip_source_usefulness,
             "include_no_rag_baseline": include_no_rag_baseline,
+            "include_classic_vector_strategies": include_classic_vector_strategies,
+            "include_multi_hyde": include_multi_hyde,
+            "multi_hyde_k_per_query": multi_hyde_k_per_query,
+            "multi_hyde_rerank_top_k": multi_hyde_rerank_top_k,
         },
         "summary": summary,
         "details": details,
     }
 
     output_dir = os.path.dirname(output_path)
-    score_output_path = os.path.join(output_dir, "eval_scores.json")
-    sources_output_path = os.path.join(output_dir, "eval_sources.json")
+    output_stem = os.path.splitext(os.path.basename(output_path))[0]
+    suffix = output_stem.replace("eval_results", "", 1)
+    score_output_path = os.path.join(output_dir, f"eval_scores{suffix}.json")
+    sources_output_path = os.path.join(output_dir, f"eval_sources{suffix}.json")
 
     score_report = build_score_report(
         eval_mode=eval_mode,
@@ -1425,6 +1951,33 @@ async def run_evaluation() -> None:
                 )
             row += f" | {scores.get('avg_overall', 0):>7.1f}"
             print(row)
+
+        reranker_comparison = summary.get("reranker_comparison", {})
+        if reranker_comparison:
+            print("\n[Eval] Reranker comparison")
+            print("Baseline: " + str(reranker_comparison.get("baseline", "unknown")))
+            print(
+                "Best (retrieval relevance): "
+                + str(reranker_comparison.get("best_by_retrieval_relevance", "unknown"))
+            )
+            print(
+                "Best (overall): "
+                + str(reranker_comparison.get("best_by_overall", "unknown"))
+            )
+
+            for item in reranker_comparison.get("comparisons", []):
+                if not isinstance(item, dict):
+                    continue
+                print(
+                    "- "
+                    + str(item.get("strategy", "unknown"))
+                    + " vs "
+                    + str(item.get("baseline", "unknown"))
+                    + f" | Δretrieval={float(item.get('delta_retrieval_relevance', 0)):+.1f}"
+                    + f" | Δoverall={float(item.get('delta_overall', 0)):+.1f}"
+                    + f" | Δrelevance={float(item.get('delta_relevance', 0)):+.1f}"
+                    + f" | Δgroundedness={float(item.get('delta_groundedness', 0)):+.1f}"
+                )
 
     print(f"\n[Eval] Results saved to: {output_path}")
     print(f"[Eval] Scores saved to: {score_output_path}")

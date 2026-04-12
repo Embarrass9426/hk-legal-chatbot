@@ -1,11 +1,15 @@
 import os
-import json
+import re
+import asyncio
+import numpy as np
+from typing import List
 from langchain_core.messages import HumanMessage, SystemMessage
 
 
 async def rewrite_query(user_query: str, llm, scenario: str = "") -> str:
     """
     Rewrites the user question into a legal-focused retrieval query.
+    Kept for backward compatibility (eval framework).
     """
     system_prompt = """You are an expert legal query rewriter for a retrieval system.
 Task: Rewrite the user's query into a clear, precise, and information-rich version optimized for legal document retrieval.
@@ -45,42 +49,184 @@ Return ONLY the rewritten query text.
         return user_query  # Fallback to original query
 
 
-class LegalReranker:
+HYDE_SYSTEM_PROMPT = (
+    "You are an expert Hong Kong legal assistant with comprehensive knowledge "
+    "of Hong Kong ordinances and regulations.\n"
+    "Your goal is to help users understand their legal rights and obligations "
+    "under Hong Kong law.\n\n"
+    "Instructions:\n"
+    "1. Write a short passage (2-4 paragraphs) that resembles an excerpt from a "
+    "Hong Kong ordinance, regulation, or official legal explanatory text that would "
+    "contain the answer to the user's question.\n"
+    "2. Use formal legal/statutory vocabulary.\n"
+    "3. Include the likely legal test, rights, duties, conditions, exceptions, "
+    "or remedies that would apply.\n"
+    "4. Prefer ordinance names only when strongly implied by the question.\n"
+    "5. Do NOT invent specific section numbers, Cap. numbers, deadlines, or "
+    "penalties unless provided in the user query.\n"
+    "6. If the question is ambiguous, cover 2-3 closely related legal concepts.\n"
+    "7. Do NOT answer the user directly. Do NOT give advice.\n"
+    "8. Output ONLY the hypothetical legal passage in English."
+)
+
+HYDE_NUM_GENERATIONS = int(os.getenv("HYDE_NUM_GENERATIONS", "3"))
+
+
+async def generate_hyde_passages(
+    user_query: str,
+    llm,
+    num_generations: int = HYDE_NUM_GENERATIONS,
+) -> List[str]:
     """
-    Reranker using Qwen3/2-Reranker-8B or similar BGE models.
-    Optimizes top-K results to ensure most relevant legal sections are prioritized.
+    Generate multiple hypothetical legal passages for a user query using HyDE.
+    Returns a list of hypothetical passages (strings).
     """
+    messages = [
+        SystemMessage(content=HYDE_SYSTEM_PROMPT),
+        HumanMessage(content=f"Question: {user_query}"),
+    ]
 
-    def __init__(self, model_name="BAAI/bge-reranker-v2-m3"):
-        self.model = None
-        self.model_name = model_name
+    async def _generate_one() -> str:
+        try:
+            response = await llm.ainvoke(messages)
+            return response.content.strip()
+        except Exception as e:
+            print(f"[HyDE] Error generating passage: {e}")
+            return ""
 
-    def _load_model(self):
-        if self.model is None:
-            try:
-                from FlagEmbedding import FlagReranker
-                import torch
+    tasks = [_generate_one() for _ in range(num_generations)]
+    passages = await asyncio.gather(*tasks)
 
-                # Only load if CUDA is available as 8B rerankers are intensive
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                self.model = FlagReranker(self.model_name, use_fp16=(device == "cuda"))
-                print(f"Reranker {self.model_name} loaded successfully on {device}.")
-            except Exception as e:
-                print(f"Failed to load reranker: {e}")
-                self.model = False
+    valid_passages = [p for p in passages if p]
+    if not valid_passages:
+        print("[HyDE] All generations failed, falling back to raw query")
+        return [user_query]
 
-    def rerank(self, query, contexts, top_n=3):
-        """
-        Reranks a list of contexts based on relevance to the query.
-        """
-        self._load_model()
-        if not self.model or not contexts:
-            return contexts[:top_n]
+    return valid_passages
 
-        pairs = [[query, ctx["page_content"]] for ctx in contexts]
-        scores = self.model.compute_score(pairs)
 
-        scored_contexts = list(zip(scores, contexts))
-        scored_contexts.sort(key=lambda x: x[0], reverse=True)
+async def generate_hyde_embeddings(
+    user_query: str,
+    llm,
+    embedding_service,
+    num_generations: int = HYDE_NUM_GENERATIONS,
+) -> List[float]:
+    """
+    Full HyDE pipeline: generate hypothetical passages, embed each with the
+    document-side prefix, average the embeddings, and return a single vector.
 
-        return [ctx for score, ctx in scored_contexts[:top_n]]
+    Also embeds the raw user query and averages it in (dual-path retrieval).
+
+    Returns a single averaged embedding vector ready for Pinecone query.
+    """
+    passages = await generate_hyde_passages(user_query, llm, num_generations)
+
+    doc_prefix = "Represent this legal document passage for retrieval: "
+    hyde_texts = [doc_prefix + p for p in passages]
+
+    query_prefix = "Represent this question for retrieving relevant legal documents: "
+    query_text = query_prefix + user_query
+
+    all_texts = hyde_texts + [query_text]
+    all_embeddings = embedding_service.embed_documents(all_texts)
+
+    arr = np.array(all_embeddings, dtype=np.float32)
+    averaged = np.mean(arr, axis=0)
+
+    norm = np.linalg.norm(averaged)
+    if norm > 1e-8:
+        averaged = averaged / norm
+
+    return averaged.tolist()
+
+
+# ---------------------------------------------------------------------------
+# Multi-query HyDE: ordinance-decomposition strategy
+# ---------------------------------------------------------------------------
+
+MULTI_HYDE_SYSTEM_PROMPT = (
+    "You are an expert Hong Kong legal retrieval assistant.\n"
+    "Given a user question, generate exactly 5 short hypothetical legal passages "
+    "(2-3 sentences each) that resemble excerpts from different Hong Kong ordinances "
+    "or regulations relevant to the question.\n\n"
+    "Rules:\n"
+    "1. Each passage should target a DIFFERENT ordinance or legal provision that could "
+    "help answer the question.\n"
+    "2. Use formal legal/statutory vocabulary.\n"
+    "3. Include likely legal tests, rights, duties, conditions, or exceptions.\n"
+    "4. Prefer ordinance names only when strongly implied by the question.\n"
+    "5. Do NOT invent specific Cap. numbers, section numbers, deadlines, or penalties "
+    "unless provided in the user query.\n"
+    "6. Do NOT include analysis, explanations, or commentary — output ONLY the 5 passages.\n"
+    "7. Separate each passage with the exact delimiter: ===\n"
+    "8. Output exactly 5 passages. No more, no less.\n\n"
+    "Format:\n"
+    "<passage 1>\n"
+    "===\n"
+    "<passage 2>\n"
+    "===\n"
+    "<passage 3>\n"
+    "===\n"
+    "<passage 4>\n"
+    "===\n"
+    "<passage 5>"
+)
+
+MULTI_HYDE_DELIMITER_RE = re.compile(r"\n\s*===\s*\n")
+MULTI_HYDE_MIN_PASSAGE_LEN = 20
+MULTI_HYDE_MAX_PASSAGES = 5
+
+
+async def generate_multi_hyde_passages(
+    user_query: str,
+    llm,
+    max_completion_tokens: int = 1536,
+) -> List[str]:
+    """
+    Ask the LLM to generate up to 5 ordinance-specific hypothetical passages,
+    each targeting a different legal provision relevant to the user's question.
+
+    Returns a list of parsed passage strings (1-5 items).
+    Returns an empty list on total failure (caller should fall back to old HyDE).
+    """
+    messages = [
+        SystemMessage(content=MULTI_HYDE_SYSTEM_PROMPT),
+        HumanMessage(content=f"Question: {user_query}"),
+    ]
+
+    try:
+        bound_llm = llm.bind(max_completion_tokens=max_completion_tokens)
+        response = await bound_llm.ainvoke(messages)
+        raw_text = response.content.strip()
+    except Exception as e:
+        print(f"[MultiHyDE] LLM generation failed: {e}")
+        return []
+
+    if not raw_text:
+        print("[MultiHyDE] Empty LLM response")
+        return []
+
+    normalized = raw_text.replace("\r\n", "\n")
+    blocks = MULTI_HYDE_DELIMITER_RE.split(normalized)
+
+    passages: List[str] = []
+    for block in blocks:
+        cleaned = block.strip()
+        if len(cleaned) >= MULTI_HYDE_MIN_PASSAGE_LEN:
+            passages.append(cleaned)
+
+    seen: set[str] = set()
+    unique_passages: List[str] = []
+    for p in passages:
+        if p not in seen:
+            seen.add(p)
+            unique_passages.append(p)
+
+    unique_passages = unique_passages[:MULTI_HYDE_MAX_PASSAGES]
+
+    if not unique_passages:
+        print("[MultiHyDE] No valid passages parsed from LLM response")
+        return []
+
+    print(f"[MultiHyDE] Parsed {len(unique_passages)} passages from LLM response")
+    return unique_passages

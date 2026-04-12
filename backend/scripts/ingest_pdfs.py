@@ -6,6 +6,7 @@ import json
 import threading
 import uuid
 import numpy as np
+from queue import Queue, Empty, Full
 
 # Ensure project root is in sys.path (scripts -> backend -> project root = 3 levels)
 sys.path.append(
@@ -14,17 +15,22 @@ sys.path.append(
 
 from backend.core import setup_env
 
+# Ingestion-specific default: keep larger TRT workspace for embedding throughput.
+if os.getenv("EMBEDDING_TRT_MAX_WORKSPACE_SIZE") is None:
+    os.environ["EMBEDDING_TRT_MAX_WORKSPACE_SIZE"] = str(6 * 1024**3)
+
 # 1. Setup CUDA/TensorRT environment before any other imports
 setup_env.setup_cuda_dlls()
 
 # 2. Clear TensorRT cache before first embedding service usage
 from backend.services.embedding_service import EmbeddingService
 
-EmbeddingService.clear_tensorrt_cache()
+if os.getenv("EMBEDDING_CLEAR_TRT_CACHE", "0").strip().lower() in {"1", "true", "yes"}:
+    EmbeddingService.clear_tensorrt_cache()
 
 from backend.services.vector_store import VectorStoreManager
 from backend.services.embedding_service import get_embedding_service
-from backend.core.embedding_shared import job_q, result_q, STOP_TOKEN
+from backend.core.embedding_shared import job_q, STOP_TOKEN
 from backend.parsers.pdf_parser import PDFLegalParserV2
 
 
@@ -45,17 +51,123 @@ def embedding_worker():
             job_q.task_done()
             break
 
-        if job["type"] == "embed_request":
-            texts = job["texts"]
-            job_id = job["id"]
+        if job.get("type") != "embed_request":
+            job_q.task_done()
+            continue
+
+        batched_jobs = [job]
+        total_texts = len(job.get("texts", []))
+        stop_requested = False
+        drain_deadline = time.time() + WORKER_MICROBATCH_WAIT_SECONDS
+
+        while total_texts < WORKER_MICROBATCH_MAX_TEXTS:
+            remaining = drain_deadline - time.time()
+            if remaining <= 0:
+                break
+
             try:
-                # Use centralized service for embeddings
-                vectors = service.embed_documents(texts)
-                result_q.put({"id": job_id, "vectors": vectors})
-            except Exception as e:
-                result_q.put({"id": job_id, "error": str(e)})
-            finally:
+                extra_job = job_q.get(timeout=remaining)
+            except Empty:
+                break
+
+            if extra_job is STOP_TOKEN:
+                stop_requested = True
                 job_q.task_done()
+                break
+
+            if extra_job.get("type") != "embed_request":
+                job_q.task_done()
+                continue
+
+            batched_jobs.append(extra_job)
+            total_texts += len(extra_job.get("texts", []))
+
+        merged_texts = []
+        for queued_job in batched_jobs:
+            merged_texts.extend(queued_job.get("texts", []))
+
+        source_counts = {}
+        for queued_job in batched_jobs:
+            source = queued_job.get("source", "unknown")
+            source_counts[source] = source_counts.get(source, 0) + 1
+
+        print(
+            "[Worker] Processing micro-batch "
+            f"jobs={len(batched_jobs)} texts={len(merged_texts)} queue_size={job_q.qsize()} "
+            f"sources={source_counts}"
+        )
+
+        merged_error = None
+        merged_vectors = None
+        try:
+
+            def _embed_with_fallback(texts_chunk, preferred_size):
+                if not texts_chunk:
+                    return []
+
+                size = max(WORKER_MIN_EMBED_SUBBATCH_TEXTS, preferred_size)
+                while True:
+                    try:
+                        vectors = []
+                        for j in range(0, len(texts_chunk), size):
+                            vectors.extend(
+                                service.embed_documents(texts_chunk[j : j + size])
+                            )
+                        return vectors
+                    except Exception as embed_exc:
+                        if size <= WORKER_MIN_EMBED_SUBBATCH_TEXTS:
+                            raise
+                        next_size = max(WORKER_MIN_EMBED_SUBBATCH_TEXTS, size // 2)
+                        if next_size == size:
+                            raise
+                        print(
+                            "[Worker] Embed sub-batch failed at size "
+                            f"{size}; retrying with {next_size}. Error: {str(embed_exc)[:140]}"
+                        )
+                        size = next_size
+
+            merged_vectors = _embed_with_fallback(
+                merged_texts, WORKER_EMBED_SUBBATCH_TEXTS
+            )
+            if len(merged_vectors) != len(merged_texts):
+                raise RuntimeError(
+                    "Embedding worker returned mismatched vector count "
+                    f"({len(merged_vectors)} vs {len(merged_texts)})"
+                )
+        except Exception as e:
+            merged_error = str(e)
+
+        if merged_error is None and merged_vectors is None:
+            merged_error = "Embedding worker produced no vectors"
+
+        offset = 0
+        for queued_job in batched_jobs:
+            job_id = queued_job.get("id", "unknown")
+            reply_q = queued_job.get("reply_q")
+            text_count = len(queued_job.get("texts", []))
+
+            if merged_error is not None:
+                payload = {"id": job_id, "error": merged_error}
+            else:
+                vectors_payload = merged_vectors if merged_vectors is not None else []
+                payload = {
+                    "id": job_id,
+                    "vectors": vectors_payload[offset : offset + text_count],
+                }
+            offset += text_count
+
+            if isinstance(reply_q, Queue):
+                try:
+                    reply_q.put(payload, timeout=5)
+                except Full:
+                    print(
+                        f"[Worker] Warning: reply queue full for job {str(job_id)[:8]}; requester may have timed out"
+                    )
+
+            job_q.task_done()
+
+        if stop_requested:
+            break
 
 
 # ------------------------------------------------------------------------------
@@ -65,6 +177,25 @@ def format_elapsed_time(seconds):
     """Formats elapsed seconds into Xm Ys."""
     m, s = divmod(seconds, 60)
     return f"{int(m)}m {int(s)}s"
+
+
+DOC_RETRIEVAL_PREFIX = "Represent this legal document passage for retrieval: "
+EMBEDDING_REPLY_TIMEOUT_SECONDS = float(
+    os.getenv("INGEST_EMBEDDING_TIMEOUT_SECONDS", "300")
+)
+INGEST_INFLIGHT_EMBED_JOBS = max(1, int(os.getenv("INGEST_INFLIGHT_EMBED_JOBS", "3")))
+WORKER_MICROBATCH_MAX_TEXTS = max(
+    1, int(os.getenv("INGEST_WORKER_MICROBATCH_MAX_TEXTS", "256"))
+)
+WORKER_MICROBATCH_WAIT_SECONDS = max(
+    0.0, float(os.getenv("INGEST_WORKER_MICROBATCH_WAIT_SECONDS", "0.05"))
+)
+WORKER_EMBED_SUBBATCH_TEXTS = max(
+    1, int(os.getenv("INGEST_WORKER_EMBED_SUBBATCH_TEXTS", "32"))
+)
+WORKER_MIN_EMBED_SUBBATCH_TEXTS = max(
+    1, int(os.getenv("INGEST_WORKER_MIN_EMBED_SUBBATCH_TEXTS", "4"))
+)
 
 
 def _validate_vector(vector, expected_dim: int):
@@ -82,17 +213,76 @@ def _validate_vector(vector, expected_dim: int):
     return True, "ok"
 
 
+def _verify_tensorrt_runtime() -> None:
+    service = get_embedding_service()
+    service.ensure_loaded()
+
+    model_backend = getattr(service.model, "model", None)
+    providers = []
+    if model_backend is not None and hasattr(model_backend, "get_providers"):
+        providers = model_backend.get_providers()
+
+    print(f"[Config] Active embedding providers: {providers}")
+
+    if "TensorrtExecutionProvider" not in providers:
+        raise RuntimeError(
+            "TensorRT is required for ingestion but TensorrtExecutionProvider is not active. "
+            "If running in WSL, activate .venv-wsl and ensure TensorRT + onnxruntime-gpu "
+            "are installed in that environment."
+        )
+
+
+def _count_tensorrt_cache_files(cache_dir: str) -> int:
+    if not os.path.isdir(cache_dir):
+        return 0
+
+    count = 0
+    for entry in os.scandir(cache_dir):
+        if entry.is_file():
+            count += 1
+    return count
+
+
+def _ensure_tensorrt_cache_built() -> None:
+    service = get_embedding_service()
+    model_path = getattr(service, "model_path", None)
+    if not isinstance(model_path, str) or not model_path:
+        print("[TensorRT Cache] Could not resolve model path; skipping cache check")
+        return
+
+    cache_dir = os.path.join(model_path, "cache")
+    existing_files = _count_tensorrt_cache_files(cache_dir)
+    if existing_files > 0:
+        print(f"[TensorRT Cache] Built: YES ({existing_files} files)")
+        return
+
+    print("[TensorRT Cache] Built: NO (warming up TensorRT cache now)")
+    service.ensure_loaded()
+    _ = service.embed_query("TensorRT cache warmup probe")
+
+    built_files = _count_tensorrt_cache_files(cache_dir)
+    if built_files > 0:
+        print(f"[TensorRT Cache] Built: YES ({built_files} files)")
+    else:
+        print(
+            "[TensorRT Cache] Warmup finished but cache file count is still 0; "
+            "runtime may be using in-memory engines"
+        )
+
+
 # ------------------------------------------------------------------------------
 # Main Ingestion Logic
 # ------------------------------------------------------------------------------
 async def ingest_legal_pdfs(
     cap_numbers=None,
-    batch_size=10,
+    batch_size=5,
+    layout_batch_size=None,
     embedding_batch_size=128,
     force_parse=False,
     skip_parse=False,
     force_embed=False,
     skip_vector_upload=False,
+    wipe_index=False,
     max_caps=None,
 ):
     """
@@ -104,21 +294,37 @@ async def ingest_legal_pdfs(
     5. Upsert to Pinecone (unless skipped)
     """
 
-    requested_batch_size = batch_size
-    batch_size = 10
-    if requested_batch_size != 10:
-        print(
-            f"[Config Override] Enforcing document concurrency=10 "
-            f"(requested concurrency={requested_batch_size})"
-        )
+    batch_size = max(1, int(batch_size))
+    if layout_batch_size is None:
+        layout_batch_size = batch_size
+    layout_batch_size = max(1, int(layout_batch_size))
 
     # 1. Start Background Worker
     worker_thread = threading.Thread(target=embedding_worker, daemon=True)
     worker_thread.start()
 
     print(
-        f"=== Starting Legal PDF Ingestion | concurrency={batch_size}, embedding batch={embedding_batch_size} ==="
+        f"=== Starting Legal PDF Ingestion | concurrency={batch_size}, "
+        f"layout_batch={layout_batch_size}, embedding batch={embedding_batch_size} ==="
     )
+    print(
+        "[Config] TensorRT required="
+        f"{os.getenv('EMBEDDING_REQUIRE_TENSORRT', '1')} "
+        "| TensorRT FP16="
+        f"{os.getenv('EMBEDDING_TRT_FP16', '1')}"
+    )
+    print(
+        "[Config] Worker micro-batch max_texts="
+        f"{WORKER_MICROBATCH_MAX_TEXTS} "
+        "| wait_seconds="
+        f"{WORKER_MICROBATCH_WAIT_SECONDS}"
+    )
+    print(f"[Config] Worker embed sub-batch texts={WORKER_EMBED_SUBBATCH_TEXTS}")
+    print(
+        "[Config] Worker minimum embed sub-batch texts="
+        f"{WORKER_MIN_EMBED_SUBBATCH_TEXTS}"
+    )
+    print(f"[Config] Ingest inflight embed jobs per cap={INGEST_INFLIGHT_EMBED_JOBS}")
     start = time.time()
     expected_dim = int(os.getenv("EMBEDDING_DIMENSION", "1024"))
     embedding_precision = (
@@ -162,15 +368,27 @@ async def ingest_legal_pdfs(
 
     # 3. Initialize Vector Store
     vsm = None
+    try:
+        _verify_tensorrt_runtime()
+        _ensure_tensorrt_cache_built()
+    except Exception as e:
+        print(f"[Embedding Runtime] TensorRT preflight failed: {e}")
+        raise
+
     if not skip_vector_upload:
         try:
             vsm = VectorStoreManager()
-            # Initialize embeddings explicitly to trigger model loading early
-            get_embedding_service()
         except Exception as e:
             print(f"[VectorStore] Initialization failed: {e}")
             print("Skipping upload due to VectorStore failure.")
             skip_vector_upload = True
+
+    if wipe_index and not skip_vector_upload and vsm:
+        print(
+            f"[VectorStore] Deleting all vectors from index '{vsm.index_name}' before ingest..."
+        )
+        vsm.index.delete(delete_all=True)
+        print("[VectorStore] Index wipe completed.")
 
     # Processing State
     processed = {"count": 0, "total": len(target_caps)}
@@ -198,8 +416,10 @@ async def ingest_legal_pdfs(
                 print(f"Parsing Cap {cap_num} (force_parse={force_parse})...")
                 parser = PDFLegalParserV2(cap_num, pdf_dir, parsed_dir)
                 chunks = parser.process_ordinance(
-                    skip_if_exists=not force_parse, layout_batch_size=batch_size
+                    skip_if_exists=not force_parse, layout_batch_size=layout_batch_size
                 )
+
+            print(f"[Cap {cap_num}] Parsing complete: {len(chunks)} chunks")
 
             if not chunks:
                 print(f"[Warning] No chunks found after parsing Cap {cap_num}.")
@@ -210,36 +430,81 @@ async def ingest_legal_pdfs(
                     f"Force mode: Will re-generate embeddings and overwrite for Cap {cap_num}"
                 )
 
-            chunk_texts = [c["content"] for c in chunks]
+            chunk_texts = [DOC_RETRIEVAL_PREFIX + c["content"] for c in chunks]
             total_chunks = len(chunk_texts)
             print(
                 f"Generating embeddings for {total_chunks} / {len(chunks)} chunks in Cap {cap_num}..."
             )
 
             all_vectors = []
-            for i in range(0, total_chunks, embedding_batch_size):
-                batch_texts = chunk_texts[i : i + embedding_batch_size]
-                batch_num = (i // embedding_batch_size) + 1
-                total_batches = (
-                    total_chunks + embedding_batch_size - 1
-                ) // embedding_batch_size
+            total_batches = (
+                total_chunks + embedding_batch_size - 1
+            ) // embedding_batch_size
+            inflight = []
+            next_batch_index = 0
+
+            def _enqueue_batch(batch_index: int):
+                start_idx = batch_index * embedding_batch_size
+                batch_texts = chunk_texts[start_idx : start_idx + embedding_batch_size]
+                batch_num = batch_index + 1
                 print(
                     f"Embedding batch {batch_num}/{total_batches} for Cap {cap_num} "
                     f"(size={len(batch_texts)})"
                 )
 
                 job_id = str(uuid.uuid4())
-                job_q.put({"type": "embed_request", "id": job_id, "texts": batch_texts})
+                reply_q = Queue(maxsize=1)
+                try:
+                    job_q.put(
+                        {
+                            "type": "embed_request",
+                            "id": job_id,
+                            "texts": batch_texts,
+                            "reply_q": reply_q,
+                            "source": "ingest",
+                        },
+                        timeout=EMBEDDING_REPLY_TIMEOUT_SECONDS,
+                    )
+                except Full as exc:
+                    raise RuntimeError(
+                        "Embedding worker queue remained full for "
+                        f"{EMBEDDING_REPLY_TIMEOUT_SECONDS}s while processing Cap {cap_num}"
+                    ) from exc
 
-                while True:
-                    res = result_q.get()
-                    if res.get("id") == job_id:
-                        if "error" in res:
-                            raise RuntimeError(f"Embedding failed: {res['error']}")
-                        all_vectors.extend(res["vectors"])
-                        break
-                    result_q.put(res)
-                    time.sleep(0.01)
+                inflight.append(
+                    {
+                        "batch_num": batch_num,
+                        "reply_q": reply_q,
+                    }
+                )
+
+            while (
+                next_batch_index < total_batches
+                and len(inflight) < INGEST_INFLIGHT_EMBED_JOBS
+            ):
+                _enqueue_batch(next_batch_index)
+                next_batch_index += 1
+
+            while inflight:
+                current = inflight.pop(0)
+                reply_q = current["reply_q"]
+                batch_num = current["batch_num"]
+
+                try:
+                    res = reply_q.get(timeout=EMBEDDING_REPLY_TIMEOUT_SECONDS)
+                except Empty as exc:
+                    raise RuntimeError(
+                        "Timed out waiting for embedding worker response for "
+                        f"Cap {cap_num} batch {batch_num}/{total_batches} after {EMBEDDING_REPLY_TIMEOUT_SECONDS}s"
+                    ) from exc
+
+                if "error" in res:
+                    raise RuntimeError(f"Embedding failed: {res['error']}")
+                all_vectors.extend(res["vectors"])
+
+                if next_batch_index < total_batches:
+                    _enqueue_batch(next_batch_index)
+                    next_batch_index += 1
 
             if skip_vector_upload or not vsm:
                 print(
@@ -356,7 +621,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ingest legal PDFs into Pinecone.")
     parser.add_argument("--cap", nargs="+", help="Specific Cap numbers (e.g. 282 599A)")
     parser.add_argument(
-        "--batch", type=int, default=10, help="Concurrent parsing jobs (default=10)"
+        "--batch", type=int, default=5, help="Concurrent parsing jobs (default=5)"
+    )
+    parser.add_argument(
+        "--layout-batch",
+        type=int,
+        default=None,
+        help="PDF parser layout batch size (default=same as --batch)",
     )
     parser.add_argument(
         "--embedding-batch",
@@ -391,17 +662,25 @@ if __name__ == "__main__":
     parser.add_argument(
         "--skip-upload", action="store_true", help="Skip Pinecone upsert stage"
     )
+    parser.add_argument(
+        "--wipe-index",
+        action="store_true",
+        default=False,
+        help="Delete all vectors in Pinecone index before ingesting",
+    )
     args = parser.parse_args()
 
     asyncio.run(
         ingest_legal_pdfs(
             cap_numbers=args.cap,
             batch_size=args.batch,
+            layout_batch_size=args.layout_batch,
             embedding_batch_size=args.embedding_batch,
             force_parse=args.force_parse,
             skip_parse=args.skip_parse,
             force_embed=args.force_embed,
             skip_vector_upload=args.skip_upload,
+            wipe_index=args.wipe_index,
             max_caps=args.limit,
         )
     )

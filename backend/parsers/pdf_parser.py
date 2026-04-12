@@ -1,8 +1,8 @@
 # backend/pdf_parser_v2.py
-from email.mime import text
-import os, re, json, time, warnings, torch, torch.nn.functional as F
+import os, re, json, warnings, torch, torch.nn.functional as F
+from queue import Queue, Empty, Full
 from typing import Dict
-from backend.core.embedding_shared import job_q, result_q
+from backend.core.embedding_shared import job_q
 
 
 class PDFLegalParserV2:
@@ -47,25 +47,73 @@ class PDFLegalParserV2:
             "Body",
             "Paragraph",
         }
+        self.semantic_chunking_enabled = os.getenv(
+            "PARSER_SEMANTIC_CHUNKING", "1"
+        ).strip().lower() not in {"0", "false", "no"}
+        self.embedding_request_timeout = float(
+            os.getenv("PARSER_EMBEDDING_TIMEOUT_SECONDS", "300")
+        )
+        self.parser_embedding_batch_size = max(
+            1, int(os.getenv("PARSER_EMBEDDING_BATCH_SIZE", "64"))
+        )
 
-    # ──────────────────────────────────────────────
-    # Get embeddings via queue (never run model directly)
     # ──────────────────────────────────────────────
     def _get_embeddings(self, texts):
-        import uuid, time
+        import uuid
 
         job_id = str(uuid.uuid4())
-        job_q.put({"type": "embed_request", "id": job_id, "texts": texts})
+        reply_q = Queue(maxsize=1)
+        try:
+            job_q.put(
+                {
+                    "type": "embed_request",
+                    "id": job_id,
+                    "texts": texts,
+                    "reply_q": reply_q,
+                    "source": "parser",
+                },
+                timeout=self.embedding_request_timeout,
+            )
+        except Full as exc:
+            raise RuntimeError(
+                f"Embedding job queue is full after waiting {self.embedding_request_timeout}s"
+            ) from exc
 
-        while True:
-            result = result_q.get()
-            if result.get("id") == job_id:
-                if "error" in result:
-                    raise RuntimeError(f"Embedding worker error: {result['error']}")
-                return result["vectors"]
-            else:
-                result_q.put(result)
-                time.sleep(0.01)
+        try:
+            result = reply_q.get(timeout=self.embedding_request_timeout)
+        except Empty as exc:
+            raise RuntimeError(
+                f"Timed out waiting {self.embedding_request_timeout}s for parser embedding response"
+            ) from exc
+
+        if "error" in result:
+            raise RuntimeError(f"Embedding worker error: {result['error']}")
+        return result["vectors"]
+
+    def _get_embeddings_batched(self, texts):
+        if not texts:
+            return []
+
+        all_vectors = []
+        total = len(texts)
+        total_batches = (
+            total + self.parser_embedding_batch_size - 1
+        ) // self.parser_embedding_batch_size
+
+        for i in range(0, total, self.parser_embedding_batch_size):
+            batch_num = (i // self.parser_embedding_batch_size) + 1
+            if total_batches > 1 and (
+                batch_num == 1 or batch_num == total_batches or batch_num % 10 == 0
+            ):
+                print(
+                    f"[PDFParser] Cap {self.cap_number}: semantic embedding batch {batch_num}/{total_batches} "
+                    f"(size={min(self.parser_embedding_batch_size, total - i)})"
+                )
+
+            batch_texts = texts[i : i + self.parser_embedding_batch_size]
+            all_vectors.extend(self._get_embeddings(batch_texts))
+
+        return all_vectors
 
     # ──────────────────────────────────────────────
     # PDF parsing & chunking (unchanged logic)
@@ -190,7 +238,7 @@ class PDFLegalParserV2:
         return len(text.split())
 
     def chunk_section_paragraph_based(
-        self, section_data: Dict, chunk_size=1200, overlap_sentences=2, threshold=0.8
+        self, section_data: Dict, chunk_size=800, overlap_sentences=2, threshold=0.8
     ):
         """
         Semantic chunking based on paragraphs. Merges paragraphs which are semantically
@@ -209,14 +257,14 @@ class PDFLegalParserV2:
         if not paragraphs:
             return []
 
-        # Step 3: Get embeddings for semantic similarity
-        paragraph_embeddings = self._get_embeddings(paragraphs)
+        paragraph_embeddings = None
+        if self.semantic_chunking_enabled:
+            paragraph_embeddings = self._get_embeddings_batched(paragraphs)
 
-        # 🔧 Convert to tensor if worker returned NumPy arrays
-        if not torch.is_tensor(paragraph_embeddings):
-            paragraph_embeddings = torch.tensor(
-                paragraph_embeddings, dtype=torch.float32
-            )
+            if not torch.is_tensor(paragraph_embeddings):
+                paragraph_embeddings = torch.tensor(
+                    paragraph_embeddings, dtype=torch.float32
+                )
 
         chunks = []
         current_paragraphs = []
@@ -235,7 +283,7 @@ class PDFLegalParserV2:
             paragraph_tokens = self._count_tokens(paragraph)
 
             # determine similarity to previous paragraph (if any)
-            if i > 0:
+            if i > 0 and paragraph_embeddings is not None:
                 similarity = F.cosine_similarity(
                     paragraph_embeddings[i - 1].unsqueeze(0),
                     paragraph_embeddings[i].unsqueeze(0),
@@ -346,10 +394,21 @@ class PDFLegalParserV2:
             f"Parsing Cap {self.cap_number} with Layout Batch Size: {layout_batch_size}..."
         )
         elements = self.parse_pdf(layout_batch_size=layout_batch_size)
+        print(
+            f"[PDFParser] Cap {self.cap_number}: partitioned {len(elements)} elements"
+        )
         sections_elements = self.group_by_sections(elements)
+        print(
+            f"[PDFParser] Cap {self.cap_number}: grouped into {len(sections_elements)} sections | semantic_chunking={self.semantic_chunking_enabled}"
+        )
 
         all_chunks = []
-        for sec in sections_elements:
+        total_sections = len(sections_elements)
+        for idx, sec in enumerate(sections_elements, 1):
+            if idx == 1 or idx % 25 == 0 or idx == total_sections:
+                print(
+                    f"[PDFParser] Cap {self.cap_number}: section {idx}/{total_sections} ({sec.get('section_title', 'Untitled')[:80]})"
+                )
             sec_chunks = self.chunk_section_paragraph_based(sec, overlap_sentences=2)
 
             # Filter out chunks where content matches section_id exactly

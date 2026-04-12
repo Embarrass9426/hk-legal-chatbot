@@ -1,0 +1,20 @@
+$ErrorActionPreference = "Stop"
+
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Resolve-Path (Join-Path $scriptDir "..\..")
+Set-Location $repoRoot
+
+if (-not $env:HK_LEGAL_EVAL_QUERY_ID_PATTERN) { $env:HK_LEGAL_EVAL_QUERY_ID_PATTERN = "(?:q[0-9]+_1|tgen(?:[0-9]+)?(?:_1)?)" }
+if (-not $env:HK_LEGAL_EVAL_RERANKER_FORCE_CPU) { $env:HK_LEGAL_EVAL_RERANKER_FORCE_CPU = "0" }
+if (-not $env:HK_LEGAL_EVAL_RETRIEVAL_TIMEOUT_SECONDS) { $env:HK_LEGAL_EVAL_RETRIEVAL_TIMEOUT_SECONDS = "600" }
+if (-not $env:HK_LEGAL_EVAL_HYDE_TIMEOUT_SECONDS) { $env:HK_LEGAL_EVAL_HYDE_TIMEOUT_SECONDS = "180" }
+if (-not $env:HK_LEGAL_EVAL_ANSWER_TIMEOUT_SECONDS) { $env:HK_LEGAL_EVAL_ANSWER_TIMEOUT_SECONDS = "300" }
+if (-not $env:HK_LEGAL_EVAL_JUDGE_TIMEOUT_SECONDS) { $env:HK_LEGAL_EVAL_JUDGE_TIMEOUT_SECONDS = "300" }
+if (-not $env:HK_LEGAL_EVAL_VECTOR_TOP_K) { $env:HK_LEGAL_EVAL_VECTOR_TOP_K = "30" }
+if (-not $env:HK_LEGAL_EVAL_RERANK_TOP_K) { $env:HK_LEGAL_EVAL_RERANK_TOP_K = "5" }
+if (-not $env:HK_LEGAL_EVAL_PROGRESS_ONLY) { $env:HK_LEGAL_EVAL_PROGRESS_ONLY = "1" }
+if (-not $env:HK_LEGAL_EVAL_SKIP_SOURCE_USEFULNESS) { $env:HK_LEGAL_EVAL_SKIP_SOURCE_USEFULNESS = "1" }
+if (-not $env:HK_LEGAL_EVAL_INCLUDE_NO_RAG_BASELINE) { $env:HK_LEGAL_EVAL_INCLUDE_NO_RAG_BASELINE = "1" }
+if (-not $env:HK_LEGAL_EVAL_INCLUDE_CLASSIC_VECTOR_STRATEGIES) { $env:HK_LEGAL_EVAL_INCLUDE_CLASSIC_VECTOR_STRATEGIES = "0" }
+
+python backend\llm_evaluate.py @args

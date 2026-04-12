@@ -22,10 +22,16 @@ def main():
     # Initialize service (loads model with TensorRT)
     print("\n[1] Initializing EmbeddingService...")
     svc = EmbeddingService()
+    svc.ensure_loaded()
 
     # Check active providers
     print("\n[2] Checking active providers...")
-    providers = svc.model.model.get_providers()
+    backend_model = getattr(svc.model, "model", None)
+    if backend_model is None or not hasattr(backend_model, "get_providers"):
+        print("   [FAIL] Could not read active providers from ORT backend")
+        return 1
+
+    providers = backend_model.get_providers()
     print(f"   Active Providers: {providers}")
 
     if "TensorrtExecutionProvider" not in providers:

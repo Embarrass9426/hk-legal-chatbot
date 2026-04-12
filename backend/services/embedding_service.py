@@ -90,9 +90,7 @@ class EmbeddingService:
                 "no",
             }
             self._active_fp16 = self.trt_fp16_preferred
-            self.trt_max_workspace_size = int(
-                os.getenv("EMBEDDING_TRT_MAX_WORKSPACE_SIZE", "268435456")
-            )
+            self.trt_max_workspace_size = self._resolve_trt_workspace_size()
             self.trt_min_subgraph_size = int(
                 os.getenv("EMBEDDING_TRT_MIN_SUBGRAPH_SIZE", "5")
             )
@@ -102,8 +100,15 @@ class EmbeddingService:
             self.trt_auxiliary_streams = int(
                 os.getenv("EMBEDDING_TRT_AUX_STREAMS", "0")
             )
+            self.embedding_max_length = int(os.getenv("EMBEDDING_MAX_LENGTH", "1024"))
             self._model_loaded = False
             self._initialized = True
+
+    def _resolve_trt_workspace_size(self) -> int:
+        configured = os.getenv("EMBEDDING_TRT_MAX_WORKSPACE_SIZE")
+        if configured:
+            return int(configured)
+        return 2 * 1024 * 1024 * 1024
 
     def ensure_loaded(self):
         if self._model_loaded:
@@ -162,6 +167,19 @@ class EmbeddingService:
         except Exception as e:
             print(f"[EmbeddingService] Failed to load tokenizer: {e}")
             raise
+
+        tokenizer_model_max = getattr(self.tokenizer, "model_max_length", None)
+        if isinstance(tokenizer_model_max, int) and tokenizer_model_max > 0:
+            self.embedding_max_length = min(
+                self.embedding_max_length, tokenizer_model_max
+            )
+        if self.embedding_max_length < 1:
+            raise ValueError(
+                f"Invalid EMBEDDING_MAX_LENGTH value: {self.embedding_max_length}"
+            )
+        print(
+            f"[EmbeddingService] Using embedding max_length={self.embedding_max_length}"
+        )
 
         sess_opt = ort.SessionOptions()
         sess_opt.intra_op_num_threads = 1
@@ -301,7 +319,7 @@ class EmbeddingService:
                     texts,
                     padding=True,
                     truncation=True,
-                    max_length=512,
+                    max_length=self.embedding_max_length,
                     return_tensors="pt",
                 )
 

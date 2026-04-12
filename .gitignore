@@ -42,6 +42,7 @@ backend/data/parsed/
 backend/data/*.pdf
 
 # LLM Evaluation Results (can regenerate)
+backend/data/eval_*.json
 backend/data/llm_audit_details.json
 backend/data/relevance.json
 backend/data/queries.jsonl
@@ -104,8 +105,6 @@ desktop.ini
 *.png
 *.jpg
 *.jpeg
-*.html
-*.xml
 debug_*
 index_*
 ingestion_*.txt

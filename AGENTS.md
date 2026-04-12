@@ -1,58 +1,42 @@
 # AGENTS GUIDE — HK Legal Chatbot
-Purpose: practical instructions for coding agents operating in this repository.
 
-Scope precedence:
-1. Actual code behavior + tool output
-2. Nearest subtree guide (`backend/AGENTS.md`, `frontend/AGENTS.md`)
-3. This root `AGENTS.md`
+Use executable sources first. If docs disagree with code/config, trust code/config.
 
----
+## Source of truth (priority)
+1. Runtime/config: `backend/**/*.py`, `backend/requirements.txt`, `frontend/package.json`, `frontend/src/**`
+2. Sub-guides: `backend/AGENTS.md`, `frontend/AGENTS.md`
+3. This file
 
-## 1) Operating Model
-- Monorepo with two active apps:
-  - `backend/` — FastAPI backend + retrieval/embedding pipeline
-  - `frontend/` — React + Vite + Tailwind UI
-- Working directory rules:
-  - Backend commands run from repo root (`backend\...` paths on Windows)
-  - Frontend commands run inside `frontend/`
-- Keep edits scoped to the target app unless cross-app behavior is required.
+## Real entrypoints and boundaries
+- Backend app entry: `backend/main.py` (`uvicorn.run(...)` under `if __name__ == "__main__"`).
+- Frontend app entry: `frontend/src/main.jsx` (`createRoot(...).render(...)`).
+- API surface: `GET /` and streaming `POST /chat` in `backend/main.py`.
+- Retrieval core: `backend/services/vector_store.py` (`VectorStoreManager`).
+- Ollama connectivity/fallback logic: `backend/core/ollama_runtime.py`.
+- Frontend stream parser + session persistence: `frontend/src/components/ChatInterface.jsx`.
 
-## 2) Cursor / Copilot Rules Status
-Checked in repo root:
-- `.cursorrules` → not found
-- `.cursor/rules/` → not found
-- `.github/copilot-instructions.md` → not found
-No additional Cursor/Copilot instruction files currently apply.
+## Exact developer commands
 
----
-
-## 3) Commands (Build / Lint / Test)
-
-### 3.1 Frontend commands
-Workdir: `frontend/`
-Source: `frontend/package.json`
+### Frontend (`workdir=frontend/`)
 ```bash
 npm install
 npm run dev
-npm run build
 npm run lint
+npm run build
 npm run preview
 ```
-Notes:
-- `build` runs `vite build`
-- `lint` runs `eslint .`
-- No frontend `test` script is defined currently
+`frontend/package.json` has no `test`/`typecheck` script.
 
-### 3.2 Backend setup
-Workdir: repo root
-Windows setup (recommended):
+### Backend setup (`workdir=repo root`)
+Windows:
 ```powershell
 py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r backend\requirements.txt
 ```
-WSL/Linux setup (when intentionally using Linux runtime):
+
+WSL/Linux:
 ```bash
 python3 -m venv .venv-wsl
 source .venv-wsl/bin/activate
@@ -60,105 +44,54 @@ python -m pip install --upgrade pip
 pip install -r backend/requirements.txt
 ```
 
-### 3.3 Backend run commands
-Workdir: repo root
+### Backend run/verification commands (`workdir=repo root`)
 ```powershell
 python backend\main.py
 python backend\llm_evaluate.py
 python backend\scripts\ingest_pdfs.py --cap 282 599A
-```
-
-### 3.4 Backend tests (single-test rule)
-Workdir: repo root
-Current tests are script-style files in `backend/tests/`.
-Run one test file directly:
-```powershell
+python backend\scripts\verify_cpu_rerank_pipeline.py --query "<query>" --mode fast
+python backend\scripts\ollama_discover.py
+python backend\scripts\ollama_lifecycle.py status
 python backend\tests\test_dll.py
 python backend\tests\test_embedding_similarity.py
 python backend\tests\test_tensorrt_embedding.py
+python backend\tests\test_reranker_tokenizer_unicode.py
 ```
-Single-test rule:
-- Execute one `test_*.py` file at a time: `python <path-to-test-file>`
-- Do **not** assume `pytest -k`/marker workflows are configured
 
----
+Evaluation wrappers:
+- PowerShell: `backend/scripts/run_eval_type1.ps1`
+- Bash: `backend/scripts/run_eval_type1.sh`
 
-## 4) Code Style Guidelines
+## Critical invariants (easy to break)
+1) **CUDA/TensorRT setup order is mandatory**
+- Call `setup_env.setup_cuda_dlls()` before importing `torch`/`onnxruntime`.
+- Pattern is used in `backend/main.py`, `backend/llm_evaluate.py`, `backend/services/*`, and key ingestion/verification scripts.
 
-### 4.1 Cross-cutting
-- Prefer small, local edits first; avoid broad refactors unless requested.
-- Match surrounding style in each touched file.
-- Reuse existing architecture/patterns before introducing abstractions.
-- Never hardcode secrets; backend credentials belong in `.env`.
+2) **Do not mix virtualenvs between Windows and WSL**
+- Windows daily runtime: `.venv`
+- WSL/Linux runtime: `.venv-wsl`
+- `backend/requirements.txt` is uv-compiled and uses platform markers (Windows CUDA wheel vs non-Windows torch wheel).
 
-### 4.2 Python backend
-Observed in `backend/main.py`, `backend/core/setup_env.py`, `backend/services/vector_store.py`.
-- Imports follow: stdlib → third-party → local `backend.*`
-- Naming: `snake_case` (functions/vars/modules), `PascalCase` (classes), `UPPER_SNAKE_CASE` (constants)
-- Typing: keep hints on public helpers and non-trivial internals
-- Formatting: 4-space indentation, double quotes are common, no semicolons
-- Error handling: explicit `try/except Exception as e` with context; no silent failures
-- Script execution: many modules support `if __name__ == "__main__":`
+3) **Backend/Frontend SSE contract is strict**
+- Backend sends `text/event-stream` from `POST /chat`.
+- Request body must include `message`, `language`, `session_id`.
+- `session_id="default"` is rejected by backend with an error event.
+- Frontend parser only handles lines prefixed with `data: ` and expects payload keys: `answer`, `references`, `error`.
+- Ordering matters: answer chunks stream first, references are emitted at the end.
+- Frontend session key is fixed: `localStorage['hk-legal-chatbot-session-id']`.
 
-### 4.3 Frontend React/JSX
-Observed in `frontend/src/App.jsx`, `frontend/src/components/ChatInterface.jsx`, `frontend/src/main.jsx`.
-- ESM project (`"type": "module"`) with functional components + hooks
-- Naming: `PascalCase` components, `camelCase` vars/functions, `UPPER_SNAKE_CASE` constants
-- Formatting: 2-space indentation, single quotes common, semicolon usage mixed (follow local file)
-- Styling: Tailwind utility classes by default; dark mode via root `dark` class
-- API: direct `fetch()` + SSE stream parsing are established patterns
-- Lint (`frontend/eslint.config.js`):
-  - `react-hooks` recommended rules enabled
-  - `react-refresh` Vite rules enabled
-  - `no-unused-vars` is error (`varsIgnorePattern: '^[A-Z_]'`)
+4) **Prefer `backend/core/*` and `backend/services/*` over root-level duplicates**
+- Root-level files like `backend/vector_store.py`, `backend/utils.py`, `backend/setup_env.py`, `backend/embedding_shared.py` exist but are not the primary path used by `backend/main.py`.
 
----
+## Environment loading and keys
+- Backend modules commonly call both `load_dotenv()` and an explicit `backend/.env` load; launch from repo root to avoid cwd surprises.
+- Required for full chat/retrieval flow: `DEEPSEEK_API_KEY`, `PINECONE_API_KEY`.
+- Common runtime toggles: `PINECONE_INDEX_NAME`, `OLLAMA_BASE_URL`, `OLLAMA_CHAT_MODEL`, `OLLAMA_HOST_GATEWAY`.
 
-## 5) Critical Guardrails
+## High-signal gotcha
+- `backend/scripts/verify_trt.py` is stale in current tree (missing `time` import and references `BoostedYuanEmbeddings` not present in active modules). Do not rely on it as a primary verification script until fixed.
 
-### 5.1 Runtime invariants (backend)
-- `setup_env.setup_cuda_dlls()` must run **before** torch/onnxruntime imports
-- Preserve this ordering in startup and embedding-related code
-- Do not mix Windows and WSL virtualenvs in one runtime flow
-
-### 5.2 Imports / dependencies / paths
-- Keep import order and spacing aligned with nearby files
-- In backend reusable modules, prefer absolute `backend.*` imports
-- Avoid machine-specific absolute paths in committed source
-- Check existing dependencies before adding new packages
-- Do not add frontend deps if existing stack already covers the use case
-
-### 5.3 Error handling expectations
-- No empty `catch` / `except` blocks
-- Include enough context for fast debugging
-- Backend: keep fallback behavior while surfacing root causes
-- Frontend: show safe user-facing fallback text on API/network failures
-
----
-
-## 6) Verification Checklist
-Before edits:
-- Confirm target app (`backend/` vs `frontend/`)
-- Check nearest subtree AGENTS guide for local constraints
-- Confirm command context (repo root vs `frontend/`)
-After edits:
-- Frontend: run `npm run lint` (and `npm run build` when build-affecting)
-- Backend: run affected scripts and relevant `backend/tests/test_*.py` files
-- Cross-app changes: verify both sides touched by the change
-
-## 7) Anti-Patterns to Avoid
-- Assuming pytest selector workflows (`-k`, markers) without evidence
-- Breaking CUDA/ONNX/TensorRT initialization ordering
-- Introducing non-Tailwind styling patterns that conflict with existing UI
-- Committing secrets (`.env`) or heavy generated/model artifacts
-
-## 8) Quick Pointers
-- API/chat streaming: `backend/main.py`
-- Vector retrieval manager: `backend/services/vector_store.py`
-- CUDA/TensorRT setup: `backend/core/setup_env.py`
-- Frontend SSE chat flow: `frontend/src/components/ChatInterface.jsx`
-- Citation UI card: `frontend/src/components/ReferenceCard.jsx`
-
-## 9) Maintenance Rule
-When build/lint/test scripts, architecture, or runtime assumptions change,
-update this file in the same PR so future agents receive accurate guidance.
+## Verification expectations after edits
+- Frontend-only changes: run `npm run lint` (and `npm run build` for UI/build-sensitive changes).
+- Backend-only changes: run the touched script(s) plus targeted `backend/tests/test_*.py` script checks.
+- Stream/protocol changes: verify backend stream behavior (`python backend\main.py`) and frontend stream parsing in `ChatInterface.jsx`.

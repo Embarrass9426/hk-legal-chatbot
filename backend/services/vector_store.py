@@ -12,6 +12,11 @@ from backend.services.embedding_service import get_embedding_service
 from backend.services.reranker_service import get_reranker_service
 
 load_dotenv()
+load_dotenv(
+    dotenv_path=os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"
+    )
+)
 
 
 class VectorStoreManager:
@@ -38,6 +43,16 @@ class VectorStoreManager:
             "false",
             "no",
         }
+        self.legacy_precision_policy = (
+            os.getenv("EMBEDDING_LEGACY_PRECISION_POLICY", "warn").strip().lower()
+        )
+        if self.legacy_precision_policy not in {"warn", "error"}:
+            print(
+                "[VectorStore] Invalid EMBEDDING_LEGACY_PRECISION_POLICY="
+                f"{self.legacy_precision_policy!r}; defaulting to 'warn'"
+            )
+            self.legacy_precision_policy = "warn"
+        self._precision_regime_checked = False
         self.enable_reranker = os.getenv(
             "ENABLE_RERANKER", "1"
         ).strip().lower() not in {
@@ -109,6 +124,9 @@ class VectorStoreManager:
             raise ValueError("Query embedding norm is zero/near-zero.")
 
     def _enforce_precision_regime(self):
+        if self._precision_regime_checked:
+            return
+
         probe: Any = self.index.query(
             vector=[1.0 / self.expected_dimension] * self.expected_dimension,
             top_k=10,
@@ -118,18 +136,17 @@ class VectorStoreManager:
 
         matches = probe.get("matches", [])
         if not matches:
+            self._precision_regime_checked = True
             return
 
+        missing_precision_count = 0
         for match in matches:
             metadata = match.get("metadata") or {}
             stored_precision = metadata.get("embedding_precision")
 
-            if self.strict_fp16 and not stored_precision:
-                raise ValueError(
-                    "Strict FP16 mode requires precision metadata on indexed vectors, "
-                    "but legacy vectors without embedding_precision were found. "
-                    "Re-embed the full corpus in strict FP16 mode."
-                )
+            if not stored_precision:
+                missing_precision_count += 1
+                continue
 
             if stored_precision and stored_precision != self.expected_precision:
                 raise ValueError(
@@ -137,6 +154,29 @@ class VectorStoreManager:
                     f"index sample={stored_precision}, runtime={self.expected_precision}. "
                     "Re-embed corpus with a single precision mode for stable search ranking."
                 )
+
+        if missing_precision_count > 0:
+            warning_message = (
+                "Detected legacy vectors without embedding_precision metadata "
+                f"in query probe sample ({missing_precision_count}/{len(matches)})."
+            )
+            if self.legacy_precision_policy == "error":
+                raise ValueError(
+                    "Strict FP16 mode requires precision metadata on indexed vectors, "
+                    "but legacy vectors without embedding_precision were found. "
+                    "Re-embed the full corpus in strict FP16 mode, or temporarily set "
+                    "EMBEDDING_LEGACY_PRECISION_POLICY=warn to allow legacy reads. "
+                    + warning_message
+                )
+
+            print(
+                "[VectorStore] WARNING: "
+                + warning_message
+                + " Proceeding with runtime precision assumptions for legacy records. "
+                + "Recommended action: re-embed full corpus with embedding_precision metadata."
+            )
+
+        self._precision_regime_checked = True
 
     def upsert_chunks(self, chunks: List[Dict[str, Any]]):
         """
@@ -162,6 +202,9 @@ class VectorStoreManager:
                 "total_chunks_in_section": c.get("total_chunks_in_section", 1),
                 "citation": c["citation"],
                 "source_url": c["source_url"],
+                "embedding_precision": self.expected_precision,
+                "embedding_dimension": self.expected_dimension,
+                "embedding_strict_fp16": self.strict_fp16,
             }
             metadatas.append(meta)
 
@@ -182,7 +225,7 @@ class VectorStoreManager:
                 ids=ids[i : i + batch_size],
             )
 
-    def search_with_expansion(self, query: str, k: int = 10):
+    def search_with_expansion(self, query: str, k: int = 5):
         """
         Retrieves top-k chunks via similarity search, then expands each to its full section.
         No reranking — just search + expand.
@@ -193,15 +236,17 @@ class VectorStoreManager:
         query_with_prefix = (
             f"Represent this question for retrieving relevant legal documents: {query}"
         )
+        self._enforce_precision_regime()
         initial_results = self.vector_store.similarity_search(query_with_prefix, k=k)
 
         return self._expand_to_sections(initial_results)
 
     def search_with_rerank_and_expansion(
-        self, query: str, k: int = 10, rerank_top_k: int = 5
+        self, query: str, k: int = 5, rerank_top_k: int = 5
     ):
         """
-        Strategy D: vector search top_k -> rerank to rerank_top_k -> expand those to full sections.
+        Legacy strategy: vector search top_k -> rerank to rerank_top_k -> expand to full sections.
+        Kept for backward compatibility with eval framework.
         """
         if not self.api_key:
             return []
@@ -209,6 +254,7 @@ class VectorStoreManager:
         query_with_prefix = (
             f"Represent this question for retrieving relevant legal documents: {query}"
         )
+        self._enforce_precision_regime()
         initial_results = self.vector_store.similarity_search(query_with_prefix, k=k)
 
         if self.reranker is None:
@@ -218,7 +264,55 @@ class VectorStoreManager:
 
         return self._expand_to_sections(reranked)
 
-    def _expand_to_sections(self, documents: List[Any]):
+    def search_hyde_with_rerank_and_expansion(
+        self,
+        hyde_embedding: List[float],
+        original_query: str,
+        k: int = 50,
+        rerank_top_k: int = 10,
+        max_chunks_per_section: int = 20,
+    ):
+        """
+        HyDE pipeline: vector search using pre-computed HyDE embedding → expand
+        to full sections → rerank using original user query → return top sections.
+        """
+        if not self.api_key:
+            return []
+
+        self._enforce_precision_regime()
+        self._validate_query_vector(hyde_embedding)
+
+        matches: Any = self.index.query(
+            vector=hyde_embedding,
+            top_k=k,
+            include_metadata=True,
+            include_values=False,
+        )
+
+        from langchain_core.documents import Document
+
+        initial_docs = []
+        for match in matches.get("matches", []):
+            metadata = match.get("metadata") or {}
+            page_content = metadata.get("content", "")
+            initial_docs.append(Document(page_content=page_content, metadata=metadata))
+
+        expanded = self._expand_to_sections(
+            initial_docs, max_chunks_per_section=max_chunks_per_section
+        )
+
+        flat_docs = self._flatten_expanded_sections(expanded)
+
+        if self.reranker is None:
+            return self._regroup_to_sections(flat_docs[:rerank_top_k])
+
+        reranked = self.reranker.rerank(original_query, flat_docs, top_k=rerank_top_k)
+
+        return self._regroup_to_sections(reranked)
+
+    def _expand_to_sections(
+        self, documents: List[Any], max_chunks_per_section: int = 100
+    ):
         """
         Given a list of chunk Documents, fetch all sibling chunks for each unique section.
         """
@@ -241,7 +335,7 @@ class VectorStoreManager:
             section_results: Any = index.query(
                 vector=[1.0 / self.expected_dimension] * self.expected_dimension,
                 filter=query_filter,
-                top_k=100,
+                top_k=max_chunks_per_section,
                 include_metadata=True,
                 include_values=False,
             )
@@ -265,7 +359,52 @@ class VectorStoreManager:
 
         return expanded_context
 
-    def search(self, query: str, k: int = 10):
+    @staticmethod
+    def _flatten_expanded_sections(
+        expanded: List[Dict[str, Any]],
+    ) -> List[Any]:
+        from langchain_core.documents import Document
+
+        flat: List[Any] = []
+        for section in expanded:
+            for chunk in section.get("chunks", []):
+                metadata = chunk.get("metadata", {})
+                content = chunk.get("content", "")
+                flat.append(Document(page_content=content, metadata=metadata))
+        return flat
+
+    @staticmethod
+    def _regroup_to_sections(
+        documents: List[Any],
+    ) -> List[Dict[str, Any]]:
+        from collections import OrderedDict
+
+        from typing import Tuple
+
+        grouped: OrderedDict[Tuple[str, str], List[Dict[str, Any]]] = OrderedDict()
+        for doc in documents:
+            metadata = getattr(doc, "metadata", {}) or {}
+            doc_id = metadata.get("doc_id", "")
+            section_id = metadata.get("section_id", "")
+            key = (doc_id, section_id)
+            if key not in grouped:
+                grouped[key] = []
+            grouped[key].append(
+                {
+                    "content": getattr(doc, "page_content", ""),
+                    "metadata": metadata,
+                }
+            )
+
+        result = []
+        for (doc_id, section_id), chunks in grouped.items():
+            chunks.sort(key=lambda x: x["metadata"].get("chunk_index", 0))
+            result.append(
+                {"section_id": section_id, "doc_id": doc_id, "chunks": chunks}
+            )
+        return result
+
+    def search(self, query: str, k: int = 5):
         """
         Pure embedding similarity search (Top-k) without reranking or expansion.
         """
@@ -303,3 +442,69 @@ class VectorStoreManager:
         if self.reranker is None:
             return documents[:top_k]
         return self.reranker.rerank(query, documents, top_k=top_k)
+
+    def search_multi_hyde_with_rerank_and_expansion(
+        self,
+        passages: List[str],
+        original_query: str,
+        k_per_query: int = 3,
+        rerank_top_k: int = 5,
+        max_chunks_per_section: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """
+        Multi-query HyDE pipeline:
+        1. Batch-embed all passages with doc-side prefix
+        2. Run one Pinecone query per embedding (k_per_query each)
+        3. Merge raw hits, deduplicate by (doc_id, section_id)
+        4. Expand unique sections once
+        5. Flatten → rerank with original query → regroup to sections
+        """
+        if not self.api_key or not passages:
+            return []
+
+        self._enforce_precision_regime()
+
+        doc_prefix = "Represent this legal document passage for retrieval: "
+        prefixed_texts = [doc_prefix + p for p in passages]
+        all_embeddings = self.embeddings.embed_documents(prefixed_texts)
+
+        from langchain_core.documents import Document
+
+        merged_docs: List[Any] = []
+        seen_ids: set[str] = set()
+
+        for embedding in all_embeddings:
+            self._validate_query_vector(embedding)
+            matches: Any = self.index.query(
+                vector=embedding,
+                top_k=k_per_query,
+                include_metadata=True,
+                include_values=False,
+            )
+
+            for match in matches.get("matches", []):
+                match_id = match.get("id", "")
+                if match_id in seen_ids:
+                    continue
+                seen_ids.add(match_id)
+
+                metadata = match.get("metadata") or {}
+                page_content = metadata.get("content", "")
+                merged_docs.append(
+                    Document(page_content=page_content, metadata=metadata)
+                )
+
+        if not merged_docs:
+            return []
+
+        expanded = self._expand_to_sections(
+            merged_docs, max_chunks_per_section=max_chunks_per_section
+        )
+
+        flat_docs = self._flatten_expanded_sections(expanded)
+
+        if self.reranker is None:
+            return self._regroup_to_sections(flat_docs[:rerank_top_k])
+
+        reranked = self.reranker.rerank(original_query, flat_docs, top_k=rerank_top_k)
+        return self._regroup_to_sections(reranked)

@@ -19,13 +19,20 @@ if project_root not in sys.path:
 
 from backend.core import setup_env
 from backend.core.ollama_runtime import stream_ollama_chat_with_fallback
-from backend.core.utils import rewrite_query
+from backend.core.utils import (
+    rewrite_query,
+    generate_hyde_embeddings,
+    generate_multi_hyde_passages,
+)
 
 setup_env.setup_cuda_dlls()
 
 from backend.services.vector_store import VectorStoreManager
 
 load_dotenv()
+load_dotenv(
+    dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+)
 
 app = FastAPI()
 deepseek_llm: ChatOpenAI | None = None
@@ -35,6 +42,35 @@ DOCS_CONTEXT_BUDGET_TOKENS = 42_000
 SUMMARY_TRIGGER_RATIO = 0.7
 SUMMARY_TRIGGER_TOKENS = int(HISTORY_CONTEXT_WINDOW_TOKENS * SUMMARY_TRIGGER_RATIO)
 RECENT_TURNS_TO_KEEP = 24
+_chat_vector_top_k = max(1, int(os.getenv("CHAT_VECTOR_TOP_K", "50")))
+_chat_rerank_top_k = max(1, int(os.getenv("CHAT_RERANK_TOP_K", "10")))
+_chat_min_section_floor = max(1, int(os.getenv("CHAT_MIN_SECTION_FLOOR", "5")))
+
+if _chat_rerank_top_k > _chat_vector_top_k:
+    print(
+        "[ChatConfig] CHAT_RERANK_TOP_K exceeds CHAT_VECTOR_TOP_K; "
+        "clamping rerank top-k to vector top-k."
+    )
+    _chat_rerank_top_k = _chat_vector_top_k
+
+if _chat_min_section_floor > _chat_rerank_top_k:
+    print(
+        "[ChatConfig] CHAT_MIN_SECTION_FLOOR exceeds CHAT_RERANK_TOP_K; "
+        "clamping section floor to rerank top-k."
+    )
+    _chat_min_section_floor = _chat_rerank_top_k
+
+CHAT_VECTOR_TOP_K = _chat_vector_top_k
+CHAT_RERANK_TOP_K = _chat_rerank_top_k
+CHAT_MIN_SECTION_FLOOR = _chat_min_section_floor
+
+CHAT_MULTI_HYDE_ENABLED = os.getenv(
+    "CHAT_MULTI_HYDE_ENABLED", "1"
+).strip().lower() not in {"0", "false", "no"}
+CHAT_MULTI_HYDE_K_PER_QUERY = max(1, int(os.getenv("CHAT_MULTI_HYDE_K_PER_QUERY", "3")))
+CHAT_MULTI_HYDE_RERANK_TOP_K = max(
+    1, int(os.getenv("CHAT_MULTI_HYDE_RERANK_TOP_K", "5"))
+)
 
 SEARCH_LEGAL_DB_TOOL = {
     "type": "function",
@@ -474,6 +510,182 @@ def collapse_documents_to_sections(results: List[Any]) -> List[Dict[str, Any]]:
     return sections
 
 
+def collapse_expanded_sections(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    sections: List[Dict[str, Any]] = []
+
+    for section in results:
+        chunks = section.get("chunks", [])
+        if not chunks:
+            continue
+
+        first_metadata = chunks[0].get("metadata", {}) or {}
+        doc_id = _safe_str(
+            section.get("doc_id", first_metadata.get("doc_id", "Unknown"))
+        )
+        section_id = _safe_str(
+            section.get("section_id", first_metadata.get("section_id", "Unknown"))
+        )
+        section_title = _safe_str(
+            first_metadata.get("section_title", "Unknown Section"),
+            "Unknown Section",
+        )
+        citation = _safe_str(
+            first_metadata.get("citation", f"Section {section_id}"),
+            f"Section {section_id}",
+        )
+        source_url = _safe_str(first_metadata.get("source_url", ""), "")
+
+        sorted_chunks = sorted(
+            chunks,
+            key=lambda c: int((c.get("metadata", {}) or {}).get("chunk_index", 0)),
+        )
+
+        pages_set = set()
+        content_parts: List[str] = []
+        for chunk in sorted_chunks:
+            metadata = chunk.get("metadata", {}) or {}
+            page_number = metadata.get("page_number")
+            if page_number not in (None, ""):
+                pages_set.add(_safe_str(page_number))
+
+            chunk_content = _safe_str(chunk.get("content", ""), "").strip()
+            if chunk_content:
+                content_parts.append(chunk_content)
+
+        if not content_parts:
+            continue
+
+        sections.append(
+            {
+                "doc_id": doc_id,
+                "section_id": section_id,
+                "section_title": section_title,
+                "citation": citation,
+                "source_url": source_url,
+                "pages": sorted(pages_set, key=lambda x: (len(x), x)),
+                "content": "\n\n".join(content_parts),
+            }
+        )
+
+    sections.sort(key=lambda s: (s["doc_id"], s["section_id"]))
+    return sections
+
+
+def _merge_sections(*section_lists: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    merged: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for sections in section_lists:
+        for section in sections:
+            key = (
+                _safe_str(section.get("doc_id", "Unknown"), "Unknown"),
+                _safe_str(section.get("section_id", "Unknown"), "Unknown"),
+            )
+            if key not in merged:
+                merged[key] = section
+
+    result = list(merged.values())
+    result.sort(
+        key=lambda s: (
+            _safe_str(s.get("doc_id", "Unknown"), "Unknown"),
+            _safe_str(s.get("section_id", "Unknown"), "Unknown"),
+        )
+    )
+    return result
+
+
+def retrieve_sections(
+    primary_query: str, fallback_query: str = ""
+) -> List[Dict[str, Any]]:
+    expanded_results = vector_manager.search_with_rerank_and_expansion(
+        primary_query,
+        k=CHAT_VECTOR_TOP_K,
+        rerank_top_k=CHAT_RERANK_TOP_K,
+    )
+    primary_sections = collapse_expanded_sections(expanded_results)
+
+    if len(primary_sections) >= CHAT_MIN_SECTION_FLOOR or not fallback_query.strip():
+        if primary_sections:
+            return primary_sections
+
+        fallback_results = vector_manager.search(primary_query, k=CHAT_RERANK_TOP_K)
+        return collapse_documents_to_sections(fallback_results)
+
+    fallback_expanded_results = vector_manager.search_with_rerank_and_expansion(
+        fallback_query,
+        k=CHAT_VECTOR_TOP_K,
+        rerank_top_k=CHAT_RERANK_TOP_K,
+    )
+    fallback_sections = collapse_expanded_sections(fallback_expanded_results)
+
+    strong_anchor_count = 0
+    for section in primary_sections:
+        citation_text = _safe_str(section.get("citation", ""), "").lower()
+        content_text = _safe_str(section.get("content", ""), "").lower()
+        if (
+            "cap." in citation_text
+            or "section" in citation_text
+            or "ordinance" in citation_text
+            or "regulation" in citation_text
+            or "section" in content_text
+            or "ordinance" in content_text
+        ):
+            strong_anchor_count += 1
+
+    if strong_anchor_count >= CHAT_MIN_SECTION_FLOOR:
+        return primary_sections
+
+    merged_sections = _merge_sections(primary_sections, fallback_sections)
+    if merged_sections:
+        return merged_sections
+
+    fallback_results = vector_manager.search(primary_query, k=CHAT_RERANK_TOP_K)
+    fallback_primary = collapse_documents_to_sections(fallback_results)
+
+    if not fallback_query.strip():
+        return fallback_primary
+
+    fallback_results_secondary = vector_manager.search(
+        fallback_query, k=CHAT_RERANK_TOP_K
+    )
+    fallback_secondary = collapse_documents_to_sections(fallback_results_secondary)
+    return _merge_sections(fallback_primary, fallback_secondary)
+
+
+def retrieve_sections_hyde(
+    hyde_embedding: List[float], original_query: str
+) -> List[Dict[str, Any]]:
+    expanded_results = vector_manager.search_hyde_with_rerank_and_expansion(
+        hyde_embedding=hyde_embedding,
+        original_query=original_query,
+        k=CHAT_VECTOR_TOP_K,
+        rerank_top_k=CHAT_RERANK_TOP_K,
+    )
+    sections = collapse_expanded_sections(expanded_results)
+
+    if sections:
+        return sections
+
+    fallback_results = vector_manager.search(original_query, k=CHAT_RERANK_TOP_K)
+    return collapse_documents_to_sections(fallback_results)
+
+
+def retrieve_sections_multi_hyde(
+    passages: List[str], original_query: str
+) -> List[Dict[str, Any]]:
+    expanded_results = vector_manager.search_multi_hyde_with_rerank_and_expansion(
+        passages=passages,
+        original_query=original_query,
+        k_per_query=CHAT_MULTI_HYDE_K_PER_QUERY,
+        rerank_top_k=CHAT_MULTI_HYDE_RERANK_TOP_K,
+    )
+    sections = collapse_expanded_sections(expanded_results)
+
+    if sections:
+        return sections
+
+    fallback_results = vector_manager.search(original_query, k=CHAT_RERANK_TOP_K)
+    return collapse_documents_to_sections(fallback_results)
+
+
 async def assess_section_usefulness(
     query: str,
     answer: str,
@@ -497,7 +709,11 @@ async def assess_section_usefulness(
     system_prompt = (
         "You evaluate legal source usefulness by section. "
         "For each source, return whether it is useful for answering the user question. "
-        "Use usefulness_score from 0.0 to 10.0 with one decimal place."
+        "Use usefulness_score from 0.0 to 10.0 with one decimal place. "
+        "Treat partial relevance as useful when it supports at least one material legal issue. "
+        "Mark is_useful=true only when the source contains at least one concrete legal anchor "
+        "(for example: ordinance, cap number, section, regulation, or explicit legal rule) "
+        "that supports the answer."
     )
     user_prompt = (
         f"Question: {query}\n\n"
@@ -561,8 +777,8 @@ async def assess_section_usefulness(
                 {
                     "source_index": idx,
                     "is_useful": False,
-                    "usefulness_score": 0.0,
-                    "reasoning": f"Source usefulness evaluation error: {exc}",
+                    "usefulness_score": 5.0,
+                    "reasoning": f"Source usefulness evaluation unavailable: {exc}",
                 }
             )
         return fallback
@@ -728,11 +944,26 @@ async def generate_chat_responses(
                 search_query = tool_call["args"].get("query", message)
                 print(f"Tool call: search_legal_database(query={search_query!r})")
 
-                retrieval_query = await rewrite_query(message, get_deepseek_llm())
-                print(f"Retrieval query: {retrieval_query}")
+                from backend.services.embedding_service import get_embedding_service
 
-                search_results = vector_manager.search(retrieval_query, k=5)
-                sections = collapse_documents_to_sections(search_results)
+                if CHAT_MULTI_HYDE_ENABLED:
+                    multi_passages = await generate_multi_hyde_passages(
+                        message, get_deepseek_llm()
+                    )
+                    if multi_passages:
+                        print(
+                            f"[MultiHyDE] Using {len(multi_passages)} passages for retrieval"
+                        )
+                        sections = retrieve_sections_multi_hyde(multi_passages, message)
+                    else:
+                        print("[MultiHyDE] Falling back to single-HyDE")
+
+                if not sections:
+                    hyde_embedding = await generate_hyde_embeddings(
+                        message, get_deepseek_llm(), get_embedding_service()
+                    )
+                    print(f"[HyDE] Generated embedding (dim={len(hyde_embedding)})")
+                    sections = retrieve_sections_hyde(hyde_embedding, message)
 
                 context_parts, references = _build_context_and_references(sections)
                 context_text = "\n\n".join(context_parts)
