@@ -515,8 +515,7 @@ async def ingest_legal_pdfs(
                 invalid_vectors = 0
                 for idx, chunk in enumerate(chunks):
                     doc_id = chunk.get("doc_id", f"cap{cap_num}")
-                    chunk_idx = chunk.get("chunk_index", idx + 1)
-                    vector_id = f"{doc_id}_chunk_{chunk_idx}"
+                    vector_id = f"{doc_id}_chunk_{idx}"
                     is_valid, reason = _validate_vector(all_vectors[idx], expected_dim)
                     if not is_valid:
                         invalid_vectors += 1

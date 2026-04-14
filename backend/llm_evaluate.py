@@ -26,7 +26,6 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from backend.services.vector_store import VectorStoreManager
 from backend.core.utils import (
     rewrite_query,
-    generate_hyde_embeddings,
     generate_multi_hyde_passages,
 )
 
@@ -817,18 +816,11 @@ def compute_retrieval_summary(details: List[Dict[str, Any]]) -> Dict[str, Any]:
     source_counts: List[int] = []
     unique_doc_counts: List[int] = []
 
-    preferred_strategy = "hyde_reranked"
+    preferred_strategy = "multi_hyde_reranked"
 
     for item in details:
         strategies_map = item.get("strategies", {})
-        strategy_data = strategies_map.get(preferred_strategy)
-        if not strategy_data:
-            for key in strategies_map.keys():
-                if key.startswith("hyde_reranked"):
-                    strategy_data = strategies_map.get(key)
-                    break
-        if not strategy_data:
-            strategy_data = item.get("strategies", {}).get("plain_vector", {})
+        strategy_data = strategies_map.get(preferred_strategy, {})
         retrieved_sections = strategy_data.get("retrieved_sections", [])
         source_counts.append(int(strategy_data.get("num_sources", 0)))
 
@@ -844,74 +836,6 @@ def compute_retrieval_summary(details: List[Dict[str, Any]]) -> Dict[str, Any]:
         "num_queries": num_queries,
         "avg_num_sources": round(sum(source_counts) / num_queries, 2),
         "avg_unique_docs": round(sum(unique_doc_counts) / num_queries, 2),
-    }
-
-
-def compute_reranker_comparison_summary(
-    strategy_summary: Dict[str, Dict[str, Any]],
-) -> Dict[str, Any]:
-    reranker_keys = sorted(
-        [key for key in strategy_summary.keys() if key.startswith("hyde_reranked__")]
-    )
-    if len(reranker_keys) < 2:
-        return {}
-
-    baseline_key = next(
-        (key for key in reranker_keys if "zerank" in key.lower()),
-        reranker_keys[0],
-    )
-    baseline = strategy_summary.get(baseline_key, {})
-
-    comparisons = []
-    for key in reranker_keys:
-        if key == baseline_key:
-            continue
-
-        current = strategy_summary.get(key, {})
-        comparisons.append(
-            {
-                "strategy": key,
-                "baseline": baseline_key,
-                "delta_retrieval_relevance": round(
-                    float(current.get("avg_retrieval_relevance", 0.0))
-                    - float(baseline.get("avg_retrieval_relevance", 0.0)),
-                    1,
-                ),
-                "delta_overall": round(
-                    float(current.get("avg_overall", 0.0))
-                    - float(baseline.get("avg_overall", 0.0)),
-                    1,
-                ),
-                "delta_relevance": round(
-                    float(current.get("avg_relevance", 0.0))
-                    - float(baseline.get("avg_relevance", 0.0)),
-                    1,
-                ),
-                "delta_groundedness": round(
-                    float(current.get("avg_groundedness", 0.0))
-                    - float(baseline.get("avg_groundedness", 0.0)),
-                    1,
-                ),
-            }
-        )
-
-    best_by_retrieval = max(
-        reranker_keys,
-        key=lambda key: float(
-            strategy_summary.get(key, {}).get("avg_retrieval_relevance", 0.0)
-        ),
-    )
-    best_by_overall = max(
-        reranker_keys,
-        key=lambda key: float(strategy_summary.get(key, {}).get("avg_overall", 0.0)),
-    )
-
-    return {
-        "baseline": baseline_key,
-        "strategies": reranker_keys,
-        "best_by_retrieval_relevance": best_by_retrieval,
-        "best_by_overall": best_by_overall,
-        "comparisons": comparisons,
     }
 
 
@@ -1176,44 +1100,56 @@ def filter_queries_by_id_pattern(
 
 
 def resolve_eval_paths(base_dir: str) -> Dict[str, str]:
-    env_queries = os.getenv("HK_LEGAL_EVAL_QUERIES_PATH", "").strip()
     env_output = os.getenv("HK_LEGAL_EVAL_OUTPUT_PATH", "").strip()
 
-    queries_candidates = [
-        env_queries,
-        os.path.join(base_dir, "data", "queries.jsonl"),
-        os.path.join(base_dir, "tests", "data", "queries.jsonl"),
-        os.path.join(os.path.dirname(base_dir), "backend", "data", "queries.jsonl"),
-    ]
-
-    resolved_queries = ""
-    for candidate in queries_candidates:
-        if candidate and os.path.exists(candidate):
-            resolved_queries = candidate
-            break
-
-    if not resolved_queries:
-        searched = "\n".join(f"- {p}" for p in queries_candidates if p)
-        raise FileNotFoundError(
-            "Could not find queries.jsonl. Checked:\n"
-            f"{searched}\n"
-            "Set HK_LEGAL_EVAL_QUERIES_PATH to an absolute path if your layout differs."
-        )
-
-    resolved_output = (
-        env_output
-        if env_output
-        else os.path.join(base_dir, "data", "eval_results.json")
-    )
-
-    output_dir = os.path.dirname(resolved_output)
+    output_dir = env_output if env_output else os.path.join(base_dir, "data")
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
-    return {
-        "queries_path": resolved_queries,
-        "output_path": resolved_output,
-    }
+    return {"output_dir": output_dir}
+
+
+def resolve_query_file_paths(base_dir: str) -> List[str]:
+    single_queries = os.getenv("HK_LEGAL_EVAL_QUERIES_PATH", "").strip()
+    multi_queries_raw = os.getenv("HK_LEGAL_EVAL_QUERIES_PATHS", "").strip()
+
+    if single_queries:
+        requested_paths = [single_queries]
+    elif multi_queries_raw:
+        requested_paths = [
+            part.strip() for part in multi_queries_raw.split(",") if part.strip()
+        ]
+    else:
+        requested_paths = [
+            os.path.join(base_dir, "data", "queries.jsonl"),
+            os.path.join(base_dir, "data", "better_queries.jsonl"),
+        ]
+
+    repo_root = os.path.dirname(base_dir)
+    resolved_paths: List[str] = []
+    for path in requested_paths:
+        candidates = [path]
+        if not os.path.isabs(path):
+            candidates.append(os.path.join(base_dir, path))
+            candidates.append(os.path.join(repo_root, path))
+
+        resolved = ""
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                resolved = candidate
+                break
+
+        if not resolved:
+            searched = "\n".join(f"- {candidate}" for candidate in candidates)
+            raise FileNotFoundError(
+                "Could not find query file. Checked:\n"
+                f"{searched}\n"
+                "Set HK_LEGAL_EVAL_QUERIES_PATHS to valid paths, or use HK_LEGAL_EVAL_QUERIES_PATH."
+            )
+
+        resolved_paths.append(resolved)
+
+    return resolved_paths
 
 
 def configure_embedding_runtime_for_eval() -> None:
@@ -1323,35 +1259,6 @@ async def _run_blocking_with_timeout(
         raise TimeoutError(f"{label} timed out after {timeout_seconds}s") from exc
 
 
-def _parse_reranker_variants(raw: str) -> List[Tuple[str, str, str]]:
-    variants: List[Tuple[str, str, str]] = []
-    for token in [part.strip() for part in raw.split(",") if part.strip()]:
-        if ":" not in token:
-            continue
-        model_dir, onnx_file = token.split(":", 1)
-        model_dir = model_dir.strip()
-        onnx_file = onnx_file.strip()
-        if not model_dir or not onnx_file:
-            continue
-        alias = re.sub(r"[^a-zA-Z0-9_\-]+", "_", model_dir)
-        variants.append((alias, model_dir, onnx_file))
-    return variants
-
-
-def _resolve_existing_reranker_variants(
-    base_dir: str,
-    variants: List[Tuple[str, str, str]],
-) -> List[Tuple[str, str, str]]:
-    resolved: List[Tuple[str, str, str]] = []
-    for alias, model_dir, onnx_file in variants:
-        onnx_path = os.path.join(base_dir, "models", model_dir, onnx_file)
-        if os.path.exists(onnx_path):
-            resolved.append((alias, model_dir, onnx_file))
-        else:
-            print(f"[Eval] Skipping missing reranker variant: {model_dir}:{onnx_file}")
-    return resolved
-
-
 def _serialize_retrieved_sections(
     sections: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
@@ -1400,27 +1307,6 @@ async def run_evaluation() -> None:
         "true",
         "yes",
     }
-    include_no_rag_baseline = os.getenv(
-        "HK_LEGAL_EVAL_INCLUDE_NO_RAG_BASELINE", "1"
-    ).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
-    include_classic_vector_strategies = os.getenv(
-        "HK_LEGAL_EVAL_INCLUDE_CLASSIC_VECTOR_STRATEGIES", "0"
-    ).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
-    include_multi_hyde = os.getenv(
-        "HK_LEGAL_EVAL_INCLUDE_MULTI_HYDE", "1"
-    ).strip().lower() not in {
-        "0",
-        "false",
-        "no",
-    }
     multi_hyde_k_per_query = max(
         1, int(os.getenv("HK_LEGAL_EVAL_MULTI_HYDE_K_PER_QUERY", "3"))
     )
@@ -1431,8 +1317,8 @@ async def run_evaluation() -> None:
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     resolved_paths = resolve_eval_paths(base_dir)
-    queries_path = resolved_paths["queries_path"]
-    output_path = resolved_paths["output_path"]
+    output_dir = resolved_paths["output_dir"]
+    query_files = resolve_query_file_paths(base_dir)
 
     current_executable = _safe_str(sys.executable, "")
     if not progress_only:
@@ -1444,10 +1330,13 @@ async def run_evaluation() -> None:
             "Use one environment consistently (WSL python3 or Windows .venv interpreter)."
         )
 
-    queries = load_queries(queries_path)
-    query_id_pattern = os.getenv("HK_LEGAL_EVAL_QUERY_ID_PATTERN", r"q\d+_1")
-    queries = filter_queries_by_id_pattern(queries, query_id_pattern)
-    num_queries = len(queries)
+    # Per-file default patterns:
+    #   queries.jsonl  → type-1 only (q1_1, q2_1, …)
+    #   everything else → all queries
+    _DEFAULT_PATTERNS: Dict[str, str] = {
+        "queries": r"q\d+_1",
+    }
+    query_batches: List[Tuple[str, str, str, List[Dict[str, Any]]]] = []
     output_json_stdout = os.getenv(
         "HK_LEGAL_EVAL_STDOUT_JSON", "0"
     ).strip().lower() in {
@@ -1456,16 +1345,24 @@ async def run_evaluation() -> None:
         "yes",
     }
 
-    if not progress_only:
+    for query_path in query_files:
+        queries = load_queries(query_path)
+        suffix = os.path.splitext(os.path.basename(query_path))[0]
+        pattern = _DEFAULT_PATTERNS.get(suffix, r".*")
+        pre_filter_count = len(queries)
+        queries = filter_queries_by_id_pattern(queries, pattern)
+        query_batches.append((query_path, suffix, pattern, queries))
+
         print(
-            f"[Eval] Loaded {num_queries} queries from {queries_path} "
-            f"using query_id pattern: {query_id_pattern}"
+            f"[Eval] Loaded {pre_filter_count} raw → {len(queries)} filtered from {query_path} "
+            f"(suffix={suffix!r}, pattern={pattern!r})"
         )
 
-    if num_queries == 0:
+    total_queries = sum(len(batch_queries) for _, _, _, batch_queries in query_batches)
+    if total_queries == 0:
         raise ValueError(
             "No queries selected for evaluation. "
-            f"Check HK_LEGAL_EVAL_QUERY_ID_PATTERN={query_id_pattern!r}."
+            f"Per-file default patterns: {_DEFAULT_PATTERNS}."
         )
 
     configure_embedding_runtime_for_eval()
@@ -1494,494 +1391,372 @@ async def run_evaluation() -> None:
 
     embedding_service.ensure_loaded()
 
-    details: List[Dict[str, Any]] = []
-    compare_rerankers = os.getenv(
-        "HK_LEGAL_EVAL_COMPARE_RERANKERS", "0"
-    ).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
-    reranker_variants_raw = os.getenv(
-        "HK_LEGAL_EVAL_RERANKER_VARIANTS",
-        "zerank-1-small:model_fp16.onnx",
-    )
-    reranker_variants = _resolve_existing_reranker_variants(
-        base_dir,
-        _parse_reranker_variants(reranker_variants_raw),
-    )
-
-    if not reranker_variants:
-        default_model_dir = os.getenv("RERANKER_MODEL_DIR", "zerank-1-small")
-        default_onnx_file = os.getenv("RERANKER_ONNX_FILE", "model_fp16.onnx")
-        reranker_variants = [("default", default_model_dir, default_onnx_file)]
-
-    strategies: List[str] = []
-    if compare_rerankers and reranker_variants:
-        for alias, _, _ in reranker_variants:
-            strategies.append(f"hyde_reranked__{alias}")
-    else:
-        strategies.append("hyde_reranked")
-
-    if include_classic_vector_strategies:
-        strategies.extend(
-            [
-                "plain_vector",
-                "rewritten_vector",
-                "rewritten_expanded",
-            ]
-        )
-    if include_multi_hyde:
-        strategies.append("multi_hyde_reranked")
-    if include_no_rag_baseline:
-        strategies.append("no_rag_baseline")
-    total_steps = num_queries * len(strategies)
+    strategies: List[str] = ["multi_hyde_reranked", "no_rag_baseline"]
+    total_steps = total_queries * len(strategies)
+    saved_output_paths: List[Tuple[str, str, str, str]] = []
 
     try:
         with tqdm(
             total=total_steps, desc="Evaluation progress", unit="strategy"
         ) as progress:
-            for idx, item in enumerate(queries, start=1):
-                query = str(item.get("query", "")).strip()
-                query_id = str(item.get("id", idx))
-                scenario = str(item.get("scenario", "")).strip()
-                if not progress_only:
-                    print(f'[Eval] Query {idx}/{num_queries}: "{query}"')
+            for (
+                query_file_path,
+                query_file_suffix,
+                batch_pattern,
+                queries,
+            ) in query_batches:
+                details: List[Dict[str, Any]] = []
+                num_queries = len(queries)
 
-                try:
-                    rewritten_query = await _run_with_semaphore(
-                        semaphore,
-                        rewrite_query(query, judge_llm, scenario=scenario),
-                    )
-                except Exception as exc:
-                    print(f"[Eval] Rewrite failed for query_id={query_id}: {exc}")
-                    rewritten_query = query
+                for idx, item in enumerate(queries, start=1):
+                    query = str(item.get("query", "")).strip()
+                    query_id = str(item.get("id", idx))
+                    scenario = str(item.get("scenario", "")).strip()
+                    if not progress_only:
+                        print(
+                            f'[Eval] Query {idx}/{num_queries} ({query_file_suffix}): "{query}"'
+                        )
 
-                query_result: Dict[str, Any] = {
-                    "query_id": query_id,
-                    "query": query,
-                    "rewritten_query": rewritten_query,
-                    "scenario": scenario,
-                    "strategies": {},
-                }
+                    try:
+                        rewritten_query = await _run_with_semaphore(
+                            semaphore,
+                            rewrite_query(query, judge_llm, scenario=scenario),
+                        )
+                    except Exception as exc:
+                        print(f"[Eval] Rewrite failed for query_id={query_id}: {exc}")
+                        rewritten_query = query
 
-                try:
-                    for strategy in strategies:
-                        progress.set_postfix({"query": query_id, "strategy": strategy})
-                        sections: List[Dict[str, Any]] = []
-                        if strategy == "no_rag_baseline":
-                            no_rag_answer = await _run_with_semaphore(
-                                semaphore,
-                                generate_ollama_answer_no_rag(
-                                    query,
-                                    model_name,
-                                    ollama_base_url,
-                                ),
+                    query_result: Dict[str, Any] = {
+                        "query_id": query_id,
+                        "query": query,
+                        "rewritten_query": rewritten_query,
+                        "scenario": scenario,
+                        "strategies": {},
+                    }
+
+                    try:
+                        for strategy in strategies:
+                            progress.set_postfix(
+                                {
+                                    "file": query_file_suffix,
+                                    "query": query_id,
+                                    "strategy": strategy,
+                                }
                             )
-                            hyde_ref_key = next(
-                                (
-                                    key
-                                    for key in query_result["strategies"].keys()
-                                    if key.startswith("hyde_reranked")
-                                ),
-                                "hyde_reranked",
-                            )
-                            ref_strategy_data = query_result["strategies"].get(
-                                hyde_ref_key,
-                                query_result["strategies"].get(
-                                    "rewritten_expanded", {}
-                                ),
-                            )
-                            reference_context = ""
-                            if ref_strategy_data:
-                                ref_sections = ref_strategy_data.get(
-                                    "retrieved_sections", []
-                                )
-                                reference_context = build_context_text_from_sections(
-                                    ref_sections
-                                )
-
-                            scores = await evaluate_no_rag_baseline(
-                                query,
-                                no_rag_answer,
-                                reference_context,
-                                judge_llm,
-                                semaphore,
-                                timeout_seconds=judge_timeout_seconds,
-                            )
-
-                            strategy_result = {
-                                "answer": no_rag_answer,
-                                "num_sources": 0,
-                                "retrieved_sections": [],
-                                "source_usefulness": [],
-                                "scores": scores,
-                            }
-                            query_result["strategies"][strategy] = strategy_result
-                            progress.update(1)
-                            continue
-                        try:
-                            if strategy.startswith("hyde_reranked"):
-                                reranker_service = vs_manager.reranker
-                                if reranker_service is None:
-                                    raise RuntimeError(
-                                        "Reranker is disabled (ENABLE_RERANKER=0), cannot run hyde_reranked strategy"
-                                    )
-
-                                strategy_model_dir = os.getenv(
-                                    "RERANKER_MODEL_DIR", "zerank-1-small"
-                                )
-                                strategy_onnx_file = os.getenv(
-                                    "RERANKER_ONNX_FILE", "model_fp16.onnx"
-                                )
-
-                                if strategy != "hyde_reranked":
-                                    alias = strategy.split("__", 1)[1]
-                                    matched_variant = next(
-                                        (
-                                            variant
-                                            for variant in reranker_variants
-                                            if variant[0] == alias
-                                        ),
-                                        None,
-                                    )
-                                    if matched_variant is not None:
-                                        _, strategy_model_dir, strategy_onnx_file = (
-                                            matched_variant
-                                        )
-
-                                reranker_service.configure_model(
-                                    model_dir_name=strategy_model_dir,
-                                    onnx_model_file=strategy_onnx_file,
-                                )
-
-                                try:
-                                    if progress_only:
-                                        print(
-                                            f"[Eval] {query_id}:{strategy} stage=hyde_embedding"
-                                        )
-                                    hyde_embedding = await _run_with_semaphore(
-                                        semaphore,
-                                        _run_with_timeout(
-                                            generate_hyde_embeddings(
-                                                query,
-                                                judge_llm,
-                                                embedding_service,
-                                            ),
-                                            hyde_timeout_seconds,
-                                            f"HyDE embedding for {query_id}",
-                                        ),
-                                    )
-                                    if progress_only:
-                                        print(
-                                            f"[Eval] {query_id}:{strategy} stage=retrieval_rerank"
-                                        )
-                                    results = await _run_blocking_with_timeout(
-                                        vs_manager.search_hyde_with_rerank_and_expansion,
-                                        retrieval_timeout_seconds,
-                                        f"Retrieval+rerank for {query_id}",
-                                        hyde_embedding=hyde_embedding,
-                                        original_query=query,
-                                        k=vector_top_k,
-                                        rerank_top_k=rerank_top_k,
-                                    )
-                                    sections = collapse_expanded_sections(results)
-                                finally:
-                                    if reranker_service.is_loaded():
-                                        reranker_service.unload()
-                            elif strategy == "plain_vector":
-                                results = vs_manager.search(query, k=vector_top_k)
-                                sections = collapse_documents_to_sections(results)
-                            elif strategy == "rewritten_vector":
-                                results = vs_manager.search(
-                                    rewritten_query, k=vector_top_k
-                                )
-                                sections = collapse_documents_to_sections(results)
-                            elif strategy == "rewritten_expanded":
-                                results = vs_manager.search_with_expansion(
-                                    rewritten_query,
-                                    k=vector_top_k,
-                                )
-                                sections = collapse_expanded_sections(results)
-                            elif strategy == "multi_hyde_reranked":
-                                reranker_service = vs_manager.reranker
-                                if reranker_service is None:
-                                    raise RuntimeError(
-                                        "Reranker is disabled (ENABLE_RERANKER=0), "
-                                        "cannot run multi_hyde_reranked strategy"
-                                    )
-
-                                reranker_service.configure_model(
-                                    model_dir_name=os.getenv(
-                                        "RERANKER_MODEL_DIR", "zerank-1-small"
-                                    ),
-                                    onnx_model_file=os.getenv(
-                                        "RERANKER_ONNX_FILE", "model_fp16.onnx"
-                                    ),
-                                )
-
-                                try:
-                                    if progress_only:
-                                        print(
-                                            f"[Eval] {query_id}:{strategy} stage=multi_hyde_generation"
-                                        )
-                                    multi_passages = await _run_with_semaphore(
-                                        semaphore,
-                                        _run_with_timeout(
-                                            generate_multi_hyde_passages(
-                                                query, judge_llm
-                                            ),
-                                            hyde_timeout_seconds,
-                                            f"Multi-HyDE generation for {query_id}",
-                                        ),
-                                    )
-
-                                    if not multi_passages:
-                                        raise RuntimeError(
-                                            "Multi-HyDE generation returned no usable passages"
-                                        )
-
-                                    if progress_only:
-                                        print(
-                                            f"[Eval] {query_id}:{strategy} stage=multi_retrieval_rerank "
-                                            f"passages={len(multi_passages)}"
-                                        )
-                                    results = await _run_blocking_with_timeout(
-                                        vs_manager.search_multi_hyde_with_rerank_and_expansion,
-                                        retrieval_timeout_seconds,
-                                        f"Multi-HyDE retrieval+rerank for {query_id}",
-                                        passages=multi_passages,
-                                        original_query=query,
-                                        k_per_query=multi_hyde_k_per_query,
-                                        rerank_top_k=multi_hyde_rerank_top_k,
-                                    )
-                                    sections = collapse_expanded_sections(results)
-                                finally:
-                                    if reranker_service.is_loaded():
-                                        reranker_service.unload()
-                            else:
-                                raise ValueError(f"Unknown strategy: {strategy}")
-
-                            context_text = build_context_text_from_sections(sections)
-                            num_sources = len(sections)
-                            if progress_only:
-                                print(
-                                    f"[Eval] {query_id}:{strategy} stage=answer sources={num_sources}"
-                                )
-                            answer = await _run_with_semaphore(
-                                semaphore,
-                                _run_with_timeout(
-                                    generate_ollama_answer(
+                            sections: List[Dict[str, Any]] = []
+                            if strategy == "no_rag_baseline":
+                                no_rag_answer = await _run_with_semaphore(
+                                    semaphore,
+                                    generate_ollama_answer_no_rag(
                                         query,
-                                        context_text,
                                         model_name,
                                         ollama_base_url,
                                     ),
-                                    answer_timeout_seconds,
-                                    f"Answer generation for {query_id}",
-                                ),
-                            )
+                                )
+                                ref_strategy_data = query_result["strategies"].get(
+                                    "multi_hyde_reranked", {}
+                                )
+                                reference_context = ""
+                                if ref_strategy_data:
+                                    ref_sections = ref_strategy_data.get(
+                                        "retrieved_sections", []
+                                    )
+                                    reference_context = (
+                                        build_context_text_from_sections(ref_sections)
+                                    )
 
-                            if progress_only:
-                                print(f"[Eval] {query_id}:{strategy} stage=judge")
-                            scores = await evaluate_strategy(
-                                strategy,
-                                query,
-                                rewritten_query=rewritten_query,
-                                context_text=context_text,
-                                answer=answer,
-                                llm=judge_llm,
-                                semaphore=semaphore,
-                                timeout_seconds=judge_timeout_seconds,
-                            )
-
-                            if skip_source_usefulness:
-                                source_usefulness = []
-                            else:
-                                source_usefulness = await _run_with_semaphore(
+                                scores = await evaluate_no_rag_baseline(
+                                    query,
+                                    no_rag_answer,
+                                    reference_context,
+                                    judge_llm,
                                     semaphore,
-                                    assess_sources_usefulness(
-                                        query,
-                                        answer,
-                                        sections,
-                                        judge_llm,
+                                    timeout_seconds=judge_timeout_seconds,
+                                )
+
+                                strategy_result = {
+                                    "answer": no_rag_answer,
+                                    "num_sources": 0,
+                                    "retrieved_sections": [],
+                                    "source_usefulness": [],
+                                    "scores": scores,
+                                }
+                                query_result["strategies"][strategy] = strategy_result
+                                progress.update(1)
+                                continue
+                            try:
+                                if strategy == "multi_hyde_reranked":
+                                    reranker_service = vs_manager.reranker
+                                    if reranker_service is None:
+                                        raise RuntimeError(
+                                            "Reranker is disabled (ENABLE_RERANKER=0), "
+                                            "cannot run multi_hyde_reranked strategy"
+                                        )
+
+                                    reranker_service.configure_model(
+                                        model_dir_name=os.getenv(
+                                            "RERANKER_MODEL_DIR", "zerank-1-small"
+                                        ),
+                                        onnx_model_file=os.getenv(
+                                            "RERANKER_ONNX_FILE", "model_fp16.onnx"
+                                        ),
+                                    )
+
+                                    try:
+                                        if progress_only:
+                                            print(
+                                                f"[Eval] {query_id}:{strategy} stage=multi_hyde_generation"
+                                            )
+                                        multi_passages = await _run_with_semaphore(
+                                            semaphore,
+                                            _run_with_timeout(
+                                                generate_multi_hyde_passages(
+                                                    query, judge_llm
+                                                ),
+                                                hyde_timeout_seconds,
+                                                f"Multi-HyDE generation for {query_id}",
+                                            ),
+                                        )
+
+                                        if not multi_passages:
+                                            raise RuntimeError(
+                                                "Multi-HyDE generation returned no usable passages"
+                                            )
+
+                                        if progress_only:
+                                            print(
+                                                f"[Eval] {query_id}:{strategy} stage=multi_retrieval_rerank "
+                                                f"passages={len(multi_passages)}"
+                                            )
+                                        results = await _run_blocking_with_timeout(
+                                            vs_manager.search_multi_hyde_with_rerank_and_expansion,
+                                            retrieval_timeout_seconds,
+                                            f"Multi-HyDE retrieval+rerank for {query_id}",
+                                            passages=multi_passages,
+                                            original_query=query,
+                                            k_per_query=multi_hyde_k_per_query,
+                                            rerank_top_k=multi_hyde_rerank_top_k,
+                                            capture_scores=True,
+                                        )
+                                        sections = collapse_expanded_sections(results)
+                                    finally:
+                                        if reranker_service.is_loaded():
+                                            reranker_service.unload()
+                                else:
+                                    raise ValueError(f"Unknown strategy: {strategy}")
+
+                                context_text = build_context_text_from_sections(
+                                    sections
+                                )
+                                num_sources = len(sections)
+                                if progress_only:
+                                    print(
+                                        f"[Eval] {query_id}:{strategy} stage=answer sources={num_sources}"
+                                    )
+                                answer = await _run_with_semaphore(
+                                    semaphore,
+                                    _run_with_timeout(
+                                        generate_ollama_answer(
+                                            query,
+                                            context_text,
+                                            model_name,
+                                            ollama_base_url,
+                                        ),
+                                        answer_timeout_seconds,
+                                        f"Answer generation for {query_id}",
                                     ),
                                 )
 
-                            strategy_result: Dict[str, Any] = {
-                                "answer": answer,
-                                "num_sources": num_sources,
-                                "retrieved_sections": _serialize_retrieved_sections(
-                                    sections
-                                ),
-                                "source_usefulness": source_usefulness,
-                                "scores": scores,
-                            }
-
-                            query_result["strategies"][strategy] = strategy_result
-
-                            if not progress_only:
-                                useful_count = sum(
-                                    1
-                                    for source in source_usefulness
-                                    if source.get("is_useful", False)
+                                if progress_only:
+                                    print(f"[Eval] {query_id}:{strategy} stage=judge")
+                                scores = await evaluate_strategy(
+                                    strategy,
+                                    query,
+                                    rewritten_query=rewritten_query,
+                                    context_text=context_text,
+                                    answer=answer,
+                                    llm=judge_llm,
+                                    semaphore=semaphore,
+                                    timeout_seconds=judge_timeout_seconds,
                                 )
-                                print(
-                                    f"[Eval]   Strategy: {strategy} — avg: {scores['avg_score']:.1f} "
-                                    f"| useful sections: {useful_count}/{num_sources}"
-                                )
-                                for source in source_usefulness:
-                                    print(
-                                        "[Eval]     "
-                                        f"S{source.get('source_index')}: "
-                                        f"{source.get('citation', 'Unknown')} | "
-                                        f"useful={source.get('is_useful', False)} | "
-                                        f"score={float(source.get('usefulness_score', 0)):.1f} | "
-                                        f"reason={source.get('reasoning', '')}"
+
+                                if skip_source_usefulness:
+                                    source_usefulness = []
+                                else:
+                                    source_usefulness = await _run_with_semaphore(
+                                        semaphore,
+                                        assess_sources_usefulness(
+                                            query,
+                                            answer,
+                                            sections,
+                                            judge_llm,
+                                        ),
                                     )
-                        except Exception as exc:
-                            err = f"Strategy error ({strategy}) for query_id={query_id}: {exc}"
-                            if not progress_only:
-                                print(f"[Eval]   {err}")
 
-                            if sections:
-                                failed_result = make_partial_strategy_result(
-                                    err, sections
-                                )
-                            else:
-                                failed_result = make_failed_strategy_result(err)
-                            query_result["strategies"][strategy] = failed_result
-                        finally:
-                            progress.update(1)
-                finally:
-                    details.append(query_result)
+                                strategy_result: Dict[str, Any] = {
+                                    "answer": answer,
+                                    "num_sources": num_sources,
+                                    "retrieved_sections": _serialize_retrieved_sections(
+                                        sections
+                                    ),
+                                    "hyde_passages": multi_passages,
+                                    "reranker_scores": (
+                                        vs_manager._last_rerank_scores
+                                        if hasattr(vs_manager, "_last_rerank_scores")
+                                        else []
+                                    ),
+                                    "source_usefulness": source_usefulness,
+                                    "scores": scores,
+                                }
+
+                                query_result["strategies"][strategy] = strategy_result
+
+                                if not progress_only:
+                                    useful_count = sum(
+                                        1
+                                        for source in source_usefulness
+                                        if source.get("is_useful", False)
+                                    )
+                                    print(
+                                        f"[Eval]   Strategy: {strategy} — avg: {scores['avg_score']:.1f} "
+                                        f"| useful sections: {useful_count}/{num_sources}"
+                                    )
+                                    for source in source_usefulness:
+                                        print(
+                                            "[Eval]     "
+                                            f"S{source.get('source_index')}: "
+                                            f"{source.get('citation', 'Unknown')} | "
+                                            f"useful={source.get('is_useful', False)} | "
+                                            f"score={float(source.get('usefulness_score', 0)):.1f} | "
+                                            f"reason={source.get('reasoning', '')}"
+                                        )
+                            except Exception as exc:
+                                err = f"Strategy error ({strategy}) for query_id={query_id}: {exc}"
+                                if not progress_only:
+                                    print(f"[Eval]   {err}")
+
+                                if sections:
+                                    failed_result = make_partial_strategy_result(
+                                        err, sections
+                                    )
+                                else:
+                                    failed_result = make_failed_strategy_result(err)
+                                query_result["strategies"][strategy] = failed_result
+                            finally:
+                                progress.update(1)
+                    finally:
+                        details.append(query_result)
+
+                timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                summary = {
+                    "by_strategy": compute_strategy_summary(details),
+                    "by_scenario": compute_scenario_summary(details),
+                }
+
+                results = {
+                    "timestamp": timestamp,
+                    "config": {
+                        "eval_mode": eval_mode,
+                        "progress_only": progress_only,
+                        "query_id_pattern": batch_pattern,
+                        "vector_top_k": vector_top_k,
+                        "rerank_top_k": rerank_top_k,
+                        "llm_model": model_name,
+                        "num_queries": num_queries,
+                        "max_concurrent_llm": max_concurrent_llm,
+                        "skip_source_usefulness": skip_source_usefulness,
+                        "multi_hyde_k_per_query": multi_hyde_k_per_query,
+                        "multi_hyde_rerank_top_k": multi_hyde_rerank_top_k,
+                        "query_file": query_file_path,
+                    },
+                    "summary": summary,
+                    "details": details,
+                }
+
+                output_path = os.path.join(
+                    output_dir, f"eval_results_{query_file_suffix}.json"
+                )
+                score_output_path = os.path.join(
+                    output_dir, f"eval_scores_{query_file_suffix}.json"
+                )
+                sources_output_path = os.path.join(
+                    output_dir, f"eval_sources_{query_file_suffix}.json"
+                )
+
+                score_report = build_score_report(
+                    eval_mode=eval_mode,
+                    timestamp=timestamp,
+                    details=details,
+                )
+                sources_report = build_sources_report(
+                    eval_mode=eval_mode,
+                    timestamp=timestamp,
+                    details=details,
+                )
+
+                with open(output_path, "w", encoding="utf-8") as file:
+                    json.dump(results, file, indent=2, ensure_ascii=False)
+
+                with open(score_output_path, "w", encoding="utf-8") as file:
+                    json.dump(score_report, file, indent=2, ensure_ascii=False)
+
+                with open(sources_output_path, "w", encoding="utf-8") as file:
+                    json.dump(sources_report, file, indent=2, ensure_ascii=False)
+
+                saved_output_paths.append(
+                    (
+                        query_file_suffix,
+                        output_path,
+                        score_output_path,
+                        sources_output_path,
+                    )
+                )
+
+                if output_json_stdout:
+                    print("\n[Eval] JSON output")
+                    print(json.dumps(results, ensure_ascii=False, indent=2))
+
+                if not progress_only:
+                    print(f"\n[Eval] Summary ({query_file_suffix})")
+                    has_helpfulness = any(
+                        "avg_helpfulness" in scores
+                        for scores in summary["by_strategy"].values()
+                    )
+
+                    header = "Strategy                         | Relevance | Groundedness | RetrievalRel"
+                    if has_helpfulness:
+                        header += " | Helpfulness | Ground.Docs"
+                    header += " | Overall"
+                    print(header)
+                    print("-" * len(header))
+
+                    for strategy_name, scores in summary["by_strategy"].items():
+                        row = (
+                            f"{strategy_name:<32} | "
+                            f"{scores.get('avg_relevance', 0):>9.1f} | "
+                            f"{scores.get('avg_groundedness', 0):>11.1f} | "
+                            f"{scores.get('avg_retrieval_relevance', 0):>12.1f}"
+                        )
+                        if has_helpfulness:
+                            row += (
+                                f" | {scores.get('avg_helpfulness', 0):>11.1f}"
+                                f" | {scores.get('avg_groundedness_vs_docs', 0):>11.1f}"
+                            )
+                        row += f" | {scores.get('avg_overall', 0):>7.1f}"
+                        print(row)
     finally:
         if embedding_service.is_loaded():
             embedding_service.unload()
 
-    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    summary = {
-        "by_strategy": compute_strategy_summary(details),
-        "by_scenario": compute_scenario_summary(details),
-    }
-    reranker_comparison = compute_reranker_comparison_summary(summary["by_strategy"])
-    if reranker_comparison:
-        summary["reranker_comparison"] = reranker_comparison
-
-    results = {
-        "timestamp": timestamp,
-        "config": {
-            "eval_mode": eval_mode,
-            "progress_only": progress_only,
-            "query_id_pattern": query_id_pattern,
-            "vector_top_k": vector_top_k,
-            "rerank_top_k": rerank_top_k,
-            "compare_rerankers": compare_rerankers,
-            "reranker_variants": reranker_variants,
-            "llm_model": model_name,
-            "num_queries": num_queries,
-            "max_concurrent_llm": max_concurrent_llm,
-            "skip_source_usefulness": skip_source_usefulness,
-            "include_no_rag_baseline": include_no_rag_baseline,
-            "include_classic_vector_strategies": include_classic_vector_strategies,
-            "include_multi_hyde": include_multi_hyde,
-            "multi_hyde_k_per_query": multi_hyde_k_per_query,
-            "multi_hyde_rerank_top_k": multi_hyde_rerank_top_k,
-        },
-        "summary": summary,
-        "details": details,
-    }
-
-    output_dir = os.path.dirname(output_path)
-    output_stem = os.path.splitext(os.path.basename(output_path))[0]
-    suffix = output_stem.replace("eval_results", "", 1)
-    score_output_path = os.path.join(output_dir, f"eval_scores{suffix}.json")
-    sources_output_path = os.path.join(output_dir, f"eval_sources{suffix}.json")
-
-    score_report = build_score_report(
-        eval_mode=eval_mode,
-        timestamp=timestamp,
-        details=details,
-    )
-    sources_report = build_sources_report(
-        eval_mode=eval_mode,
-        timestamp=timestamp,
-        details=details,
-    )
-
-    with open(output_path, "w", encoding="utf-8") as file:
-        json.dump(results, file, indent=2, ensure_ascii=False)
-
-    with open(score_output_path, "w", encoding="utf-8") as file:
-        json.dump(score_report, file, indent=2, ensure_ascii=False)
-
-    with open(sources_output_path, "w", encoding="utf-8") as file:
-        json.dump(sources_report, file, indent=2, ensure_ascii=False)
-
-    if output_json_stdout:
-        print("\n[Eval] JSON output")
-        print(json.dumps(results, ensure_ascii=False, indent=2))
-
-    if not progress_only:
-        print("\n[Eval] Summary")
-        has_helpfulness = any(
-            "avg_helpfulness" in scores for scores in summary["by_strategy"].values()
-        )
-
-        header = (
-            "Strategy                         | Relevance | Groundedness | RetrievalRel"
-        )
-        if has_helpfulness:
-            header += " | Helpfulness | Ground.Docs"
-        header += " | Overall"
-        print(header)
-        print("-" * len(header))
-
-        for strategy_name, scores in summary["by_strategy"].items():
-            row = (
-                f"{strategy_name:<32} | "
-                f"{scores.get('avg_relevance', 0):>9.1f} | "
-                f"{scores.get('avg_groundedness', 0):>11.1f} | "
-                f"{scores.get('avg_retrieval_relevance', 0):>12.1f}"
-            )
-            if has_helpfulness:
-                row += (
-                    f" | {scores.get('avg_helpfulness', 0):>11.1f}"
-                    f" | {scores.get('avg_groundedness_vs_docs', 0):>11.1f}"
-                )
-            row += f" | {scores.get('avg_overall', 0):>7.1f}"
-            print(row)
-
-        reranker_comparison = summary.get("reranker_comparison", {})
-        if reranker_comparison:
-            print("\n[Eval] Reranker comparison")
-            print("Baseline: " + str(reranker_comparison.get("baseline", "unknown")))
-            print(
-                "Best (retrieval relevance): "
-                + str(reranker_comparison.get("best_by_retrieval_relevance", "unknown"))
-            )
-            print(
-                "Best (overall): "
-                + str(reranker_comparison.get("best_by_overall", "unknown"))
-            )
-
-            for item in reranker_comparison.get("comparisons", []):
-                if not isinstance(item, dict):
-                    continue
-                print(
-                    "- "
-                    + str(item.get("strategy", "unknown"))
-                    + " vs "
-                    + str(item.get("baseline", "unknown"))
-                    + f" | Δretrieval={float(item.get('delta_retrieval_relevance', 0)):+.1f}"
-                    + f" | Δoverall={float(item.get('delta_overall', 0)):+.1f}"
-                    + f" | Δrelevance={float(item.get('delta_relevance', 0)):+.1f}"
-                    + f" | Δgroundedness={float(item.get('delta_groundedness', 0)):+.1f}"
-                )
-
-    print(f"\n[Eval] Results saved to: {output_path}")
-    print(f"[Eval] Scores saved to: {score_output_path}")
-    print(f"[Eval] Sources saved to: {sources_output_path}")
+    for (
+        query_file_suffix,
+        output_path,
+        score_output_path,
+        sources_output_path,
+    ) in saved_output_paths:
+        print(f"\n[Eval] [{query_file_suffix}] Results saved to: {output_path}")
+        print(f"[Eval] [{query_file_suffix}] Scores saved to: {score_output_path}")
+        print(f"[Eval] [{query_file_suffix}] Sources saved to: {sources_output_path}")
 
 
 if __name__ == "__main__":

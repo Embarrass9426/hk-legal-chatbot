@@ -939,6 +939,72 @@ class RerankerService:
         scored_documents.sort(key=lambda item: float(item[1]), reverse=True)
         return [doc for doc, _ in scored_documents[:top_k]]
 
+    def rerank_with_scores(
+        self,
+        query: str,
+        documents: List[Document],
+        top_k: int = 5,
+    ) -> List[Tuple[Document, float]]:
+        self.ensure_loaded()
+
+        if not documents:
+            return []
+
+        if top_k <= 0:
+            return []
+
+        if self.session is None or self.tokenizer is None:
+            return [(doc, 0.0) for doc in documents[:top_k]]
+
+        try:
+            scores = self._compute_scores(query, documents)
+            if scores.size == 0:
+                return [(doc, 0.0) for doc in documents[:top_k]]
+        except Exception as exc:
+            error_message = str(exc)
+            if (
+                self._is_tensorrt_runtime_failure(error_message)
+                and not self._trt_demoted_to_cuda
+                and not self._trt_runtime_disabled
+                and not self.disable_runtime_cpu_fallback
+            ):
+                with self._bootstrap_lock:
+                    if not self._trt_demoted_to_cuda:
+                        print(
+                            "[RerankerService] TensorRT runtime engine build failed; "
+                            "demoting to CUDA+CPU provider chain for this process lifetime."
+                        )
+                        self._trt_demoted_to_cuda = True
+                        self.session = None
+                        try:
+                            retry_sess_opt = ort.SessionOptions()
+                            retry_sess_opt.intra_op_num_threads = 1
+                            retry_sess_opt.inter_op_num_threads = 1
+                            self._create_session_with_fallback(retry_sess_opt)
+                        except Exception as retry_exc:
+                            print(
+                                "[RerankerService] Runtime fallback session init failed: "
+                                f"{retry_exc}"
+                            )
+                            return [(doc, 0.0) for doc in documents[:top_k]]
+
+                try:
+                    scores = self._compute_scores(query, documents)
+                    if scores.size == 0:
+                        return [(doc, 0.0) for doc in documents[:top_k]]
+                except Exception as retry_run_exc:
+                    print(
+                        f"[RerankerService] CPU fallback retry failed: {retry_run_exc}"
+                    )
+                    return [(doc, 0.0) for doc in documents[:top_k]]
+            else:
+                print(f"[RerankerService] Rerank failed: {exc}")
+                return [(doc, 0.0) for doc in documents[:top_k]]
+
+        scored_documents = list(zip(documents, scores.tolist()))
+        scored_documents.sort(key=lambda item: float(item[1]), reverse=True)
+        return [(doc, float(score)) for doc, score in scored_documents[:top_k]]
+
 
 def _normalize_text_for_reranker(text: str) -> str:
     normalized = unicodedata.normalize("NFKC", str(text or ""))

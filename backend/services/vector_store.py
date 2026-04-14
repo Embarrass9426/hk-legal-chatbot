@@ -63,6 +63,7 @@ class VectorStoreManager:
 
         self._get_embedding_service = get_embedding_service
         self._get_reranker_service = get_reranker_service
+        self._last_rerank_scores: List[Dict[str, Any]] = []
 
         print("[VectorStore] EmbeddingService configured for lazy loading")
         if self.enable_reranker:
@@ -450,6 +451,7 @@ class VectorStoreManager:
         k_per_query: int = 3,
         rerank_top_k: int = 5,
         max_chunks_per_section: int = 20,
+        capture_scores: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Multi-query HyDE pipeline:
@@ -461,6 +463,9 @@ class VectorStoreManager:
         """
         if not self.api_key or not passages:
             return []
+
+        if capture_scores:
+            self._last_rerank_scores = []
 
         self._enforce_precision_regime()
 
@@ -506,5 +511,23 @@ class VectorStoreManager:
         if self.reranker is None:
             return self._regroup_to_sections(flat_docs[:rerank_top_k])
 
-        reranked = self.reranker.rerank(original_query, flat_docs, top_k=rerank_top_k)
+        if capture_scores:
+            scored = self.reranker.rerank_with_scores(
+                original_query,
+                flat_docs,
+                top_k=rerank_top_k,
+            )
+            self._last_rerank_scores = [
+                {
+                    "doc_id": doc.metadata.get("doc_id", ""),
+                    "section_id": doc.metadata.get("section_id", ""),
+                    "score": round(score, 4),
+                }
+                for doc, score in scored
+            ]
+            reranked = [doc for doc, _ in scored]
+        else:
+            reranked = self.reranker.rerank(
+                original_query, flat_docs, top_k=rerank_top_k
+            )
         return self._regroup_to_sections(reranked)
