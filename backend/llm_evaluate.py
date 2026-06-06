@@ -23,7 +23,7 @@ setup_env.setup_cuda_dlls()
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from backend.services.vector_store import VectorStoreManager
+from backend.services.qdrant_store import QdrantStoreManager
 from backend.core.utils import (
     rewrite_query,
     generate_multi_hyde_passages,
@@ -1383,7 +1383,7 @@ async def run_evaluation() -> None:
 
     await verify_ollama_connectivity(model_name, ollama_base_url)
 
-    vs_manager = VectorStoreManager()
+    vs_manager = QdrantStoreManager()
 
     from backend.services.embedding_service import get_embedding_service
 

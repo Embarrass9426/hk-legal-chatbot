@@ -12,7 +12,7 @@ project_root = os.path.dirname(
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from backend.services.vector_store import VectorStoreManager
+from backend.services.qdrant_store import QdrantStoreManager
 
 # Load environment variables
 load_dotenv()
@@ -27,7 +27,7 @@ def cosine_similarity(v1, v2):
 def main():
     # 1. Initialize VectorStoreManager (uses BoostedYuanEmbeddings with CLS pooling)
     print("--- Initializing VectorStoreManager ---")
-    vsm = VectorStoreManager()
+    vsm = QdrantStoreManager()
     index = vsm.pc.Index(vsm.index_name)
 
     # 2. Define the chunk data

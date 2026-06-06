@@ -1,8 +1,16 @@
 import React from 'react';
 import { ExternalLink, BookOpen, Scale } from 'lucide-react';
 
+const truncateWords = (text, maxWords = 50) => {
+  if (!text) return '';
+  const words = text.split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(' ') + '...';
+};
+
 const ReferenceCard = ({ reference }) => {
   const { title, citation, source_url, type, page } = reference;
+  const displayTitle = truncateWords(title, 50);
 
   return (
     <a 
@@ -31,7 +39,7 @@ const ReferenceCard = ({ reference }) => {
           <ExternalLink className="w-4 h-4" />
         </div>
       </div>
-      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{title}</h4>
+      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{displayTitle}</h4>
       <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{citation}</p>
     </a>
   );

@@ -4,8 +4,9 @@ Use executable sources first. If docs disagree with code/config, trust code/conf
 
 ## Source of truth (priority)
 1. Runtime/config: `backend/**/*.py`, `backend/requirements.txt`, `frontend/package.json`, `frontend/src/**`
-2. Sub-guides: `backend/AGENTS.md`, `frontend/AGENTS.md`
-3. This file
+2. Environment template: `backend/.env.example`
+3. Sub-guides: `backend/AGENTS.md`, `frontend/AGENTS.md`
+4. This file
 
 ## Real entrypoints and package boundaries
 - Backend entry: `backend/main.py` (`if __name__ == "__main__": uvicorn.run(...)`).
@@ -15,7 +16,7 @@ Use executable sources first. If docs disagree with code/config, trust code/conf
 - Ollama failover/runtime probing lives in `backend/core/ollama_runtime.py`.
 - Frontend stream parse/session logic lives in `frontend/src/components/ChatInterface.jsx`.
 
-Prefer `backend/core/*` + `backend/services/*` over root-level duplicates (`backend/vector_store.py`, `backend/utils.py`, `backend/setup_env.py`, `backend/embedding_shared.py` are not the primary path used by `backend/main.py`).
+Prefer `backend/core/*` + `backend/services/*` over root-level duplicates (`backend/vector_store.py`, `backend/utils.py`, `backend/setup_env.py`, `backend/embedding_shared.py` are stale and not imported by `main.py`).
 
 ## Exact developer commands
 
@@ -27,7 +28,9 @@ npm run lint
 npm run build
 npm run preview
 ```
-`frontend/package.json` has no `test` or `typecheck` script.
+- `frontend/package.json` has no `test` or `typecheck` script.
+- Tailwind CSS 4.0, React 19.2, ESLint 9 flat config (`eslint.config.js`).
+- Dark mode via `darkMode: 'class'` in `tailwind.config.js`.
 
 ### Backend setup (`workdir=repo root`)
 Windows:
@@ -45,6 +48,7 @@ source .venv-wsl/bin/activate
 python -m pip install --upgrade pip
 pip install -r backend/requirements.txt
 ```
+- Requirements are uv-compiled with platform markers (Windows CUDA wheels vs non-Windows torch). Do not mix Windows and WSL virtualenvs.
 
 ### Backend run and focused verification (`workdir=repo root`)
 ```powershell
@@ -59,8 +63,8 @@ python backend\tests\test_embedding_similarity.py
 python backend\tests\test_tensorrt_embedding.py
 python backend\tests\test_reranker_tokenizer_unicode.py
 ```
-
-Evaluation wrappers: `backend/scripts/run_eval_type1.ps1` and `backend/scripts/run_eval_type1.sh`.
+- `backend/tests/` are ad-hoc scripts with `__main__` guards, NOT pytest.
+- Evaluation wrappers: `backend/scripts/run_eval_type1.ps1` and `backend/scripts/run_eval_type1.sh`.
 
 ## Critical invariants (easy to break)
 1) **CUDA/TensorRT setup order is mandatory**
@@ -69,7 +73,6 @@ Evaluation wrappers: `backend/scripts/run_eval_type1.ps1` and `backend/scripts/r
 
 2) **Do not mix Windows and WSL virtualenvs**
 - Windows runtime: `.venv`; WSL/Linux runtime: `.venv-wsl`.
-- `backend/requirements.txt` is uv-compiled with platform markers (Windows CUDA wheels vs non-Windows torch).
 
 3) **SSE contract between backend and frontend is strict**
 - Backend returns `text/event-stream` from `POST /chat`.
@@ -83,11 +86,19 @@ Evaluation wrappers: `backend/scripts/run_eval_type1.ps1` and `backend/scripts/r
 - Backend commonly does both `load_dotenv()` and explicit `backend/.env` loading; run from repo root to avoid cwd surprises.
 - Required for full chat/retrieval flow: `DEEPSEEK_API_KEY`, `PINECONE_API_KEY`.
 - Common toggles: `PINECONE_INDEX_NAME`, `OLLAMA_BASE_URL`, `OLLAMA_CHAT_MODEL`, `OLLAMA_HOST_GATEWAY`.
+- See `backend/.env.example` for the full set of env vars and defaults.
 
-## Known stale script
+## Known stale scripts
 - `backend/scripts/verify_trt.py` is currently stale (uses `time` without import and imports `BoostedYuanEmbeddings`, which is not in active services). Do not use it as a primary verification path until fixed.
+- `backend/evaluate_models.py` imports from stale root-level modules (`vector_store`, `utils`) rather than `backend.services` / `backend.core`.
 
 ## What to run after edits
 - Frontend-only changes: `npm run lint` (plus `npm run build` for UI/build-sensitive edits).
 - Backend-only changes: run touched script(s) + targeted `backend/tests/test_*.py` scripts.
 - Stream/protocol changes: run `python backend\main.py` and verify parser behavior in `frontend/src/components/ChatInterface.jsx`.
+
+## Repo-specific notes
+- `backend/bin/` contains bundled Poppler binaries required for PDF parsing.
+- `backend/models/` holds local ONNX embedding models with optional TensorRT acceleration.
+- Most backend modules can be run directly as scripts for testing (check `__main__` guards).
+- `backend/main.py` uses bare imports (`import utils`) due to `sys.path` manipulation — do not follow this pattern in new code; prefer `backend.*` absolute imports.

@@ -17,7 +17,7 @@ from backend.core import setup_env
 # Must run before importing modules that may pull torch/onnxruntime transitively.
 setup_env.setup_cuda_dlls()
 
-from backend.services.vector_store import VectorStoreManager
+from backend.services.qdrant_store import QdrantStoreManager
 
 
 CORE_CAPS: list[tuple[str, str]] = [
@@ -292,7 +292,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    vs_manager = VectorStoreManager()
+    vs_manager = QdrantStoreManager()
     if not getattr(vs_manager, "api_key", None):
         print("ERROR: PINECONE_API_KEY is not set. Cannot audit index.")
         return 1

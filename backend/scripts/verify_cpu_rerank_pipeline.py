@@ -20,7 +20,7 @@ setup_env.setup_cuda_dlls()
 
 from backend.core.utils import generate_hyde_embeddings
 from backend.services.embedding_service import get_embedding_service
-from backend.services.vector_store import VectorStoreManager
+from backend.services.qdrant_store import QdrantStoreManager
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
@@ -125,7 +125,7 @@ def main() -> int:
     os.environ["RERANKER_FORCE_CPU"] = "1"
     os.environ["RERANKER_REQUIRE_TENSORRT"] = "0"
 
-    vs_manager = VectorStoreManager()
+    vs_manager = QdrantStoreManager()
     reranker = vs_manager.reranker
     if reranker is None:
         print("FAIL: reranker disabled (ENABLE_RERANKER=0)")

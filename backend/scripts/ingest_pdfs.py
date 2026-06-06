@@ -28,7 +28,7 @@ from backend.services.embedding_service import EmbeddingService
 if os.getenv("EMBEDDING_CLEAR_TRT_CACHE", "0").strip().lower() in {"1", "true", "yes"}:
     EmbeddingService.clear_tensorrt_cache()
 
-from backend.services.vector_store import VectorStoreManager
+from backend.services.qdrant_store import QdrantStoreManager
 from backend.services.embedding_service import get_embedding_service
 from backend.core.embedding_shared import job_q, STOP_TOKEN
 from backend.parsers.pdf_parser import PDFLegalParserV2
@@ -377,7 +377,7 @@ async def ingest_legal_pdfs(
 
     if not skip_vector_upload:
         try:
-            vsm = VectorStoreManager()
+            vsm = QdrantStoreManager()
         except Exception as e:
             print(f"[VectorStore] Initialization failed: {e}")
             print("Skipping upload due to VectorStore failure.")
@@ -385,9 +385,9 @@ async def ingest_legal_pdfs(
 
     if wipe_index and not skip_vector_upload and vsm:
         print(
-            f"[VectorStore] Deleting all vectors from index '{vsm.index_name}' before ingest..."
+            f"[VectorStore] Deleting all vectors from collection '{vsm.collection_name}' before ingest..."
         )
-        vsm.index.delete(delete_all=True)
+        vsm.delete_all()
         print("[VectorStore] Index wipe completed.")
 
     # Processing State
@@ -561,13 +561,13 @@ async def ingest_legal_pdfs(
                 for i in range(0, len(vectors_to_upsert), upsert_batch_limit):
                     batch = vectors_to_upsert[i : i + upsert_batch_limit]
                     try:
-                        vsm.index.upsert(vectors=batch)
+                        vsm.upsert_vectors(batch)
                         total_upserted += len(batch)
                     except Exception as e:
                         print(f"[Error] Upsert failed for batch {i}: {e}")
 
                 print(
-                    f"[Worker] Uploaded {total_upserted} vectors for Cap {cap_num} to Pinecone."
+                    f"[Worker] Uploaded {total_upserted} vectors for Cap {cap_num} to Qdrant."
                 )
 
             with processed_lock:

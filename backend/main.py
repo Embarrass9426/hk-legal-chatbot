@@ -27,7 +27,9 @@ from backend.core.utils import (
 
 setup_env.setup_cuda_dlls()
 
-from backend.services.vector_store import VectorStoreManager
+from backend.services.qdrant_store import QdrantStoreManager
+from backend.services.embedding_service import get_embedding_service
+from backend.services.reranker_service import get_reranker_service
 
 load_dotenv()
 load_dotenv(
@@ -401,6 +403,7 @@ def _to_ollama_messages(messages: List[Any]) -> List[Dict[str, str]]:
 
 async def stream_ollama_chat(messages: List[Dict[str, str]]):
     model_name = os.getenv("OLLAMA_CHAT_MODEL", "qwen3.5:9b")
+    num_gpu = int(os.getenv("OLLAMA_NUM_GPU", "-1"))
     payload = {
         "model": model_name,
         "messages": messages,
@@ -411,6 +414,7 @@ async def stream_ollama_chat(messages: List[Dict[str, str]]):
             "temperature": 1,
             "num_ctx": 128000,
             "num_predict": 2048,
+            "num_gpu": num_gpu,
         },
     }
 
@@ -419,8 +423,24 @@ async def stream_ollama_chat(messages: List[Dict[str, str]]):
         yield chunk_text
 
 
+def _unload_retrieval_models():
+    try:
+        embedding_svc = get_embedding_service()
+        if embedding_svc.is_loaded():
+            embedding_svc.unload()
+    except Exception as e:
+        print(f"[Unload] EmbeddingService unload warning: {e}")
+
+    try:
+        reranker_svc = get_reranker_service()
+        if reranker_svc.is_loaded():
+            reranker_svc.unload()
+    except Exception as e:
+        print(f"[Unload] RerankerService unload warning: {e}")
+
+
 # Initialize components
-vector_manager = VectorStoreManager()
+vector_manager = QdrantStoreManager()
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -913,6 +933,8 @@ async def generate_chat_responses(
         )
         return
 
+    yield f"data: {json.dumps({'status': 'understanding_question'})}\n\n"
+
     memory = await _get_or_create_conversation_memory(normalized_session_id)
     async with memory.stream_lock:
         try:
@@ -943,27 +965,30 @@ async def generate_chat_responses(
                 tool_call = tool_response.tool_calls[0]
                 search_query = tool_call["args"].get("query", message)
                 print(f"Tool call: search_legal_database(query={search_query!r})")
+                yield f"data: {json.dumps({'status': 'searching_sources'})}\n\n"
 
                 from backend.services.embedding_service import get_embedding_service
 
                 if CHAT_MULTI_HYDE_ENABLED:
                     multi_passages = await generate_multi_hyde_passages(
-                        message, get_deepseek_llm()
+                        search_query, get_deepseek_llm()
                     )
                     if multi_passages:
                         print(
                             f"[MultiHyDE] Using {len(multi_passages)} passages for retrieval"
                         )
-                        sections = retrieve_sections_multi_hyde(multi_passages, message)
+                        sections = retrieve_sections_multi_hyde(multi_passages, search_query)
                     else:
                         print("[MultiHyDE] Falling back to single-HyDE")
 
                 if not sections:
                     hyde_embedding = await generate_hyde_embeddings(
-                        message, get_deepseek_llm(), get_embedding_service()
+                        search_query, get_deepseek_llm(), get_embedding_service()
                     )
                     print(f"[HyDE] Generated embedding (dim={len(hyde_embedding)})")
-                    sections = retrieve_sections_hyde(hyde_embedding, message)
+                    sections = retrieve_sections_hyde(hyde_embedding, search_query)
+
+                yield f"data: {json.dumps({'status': 'analyzing_references'})}\n\n"
 
                 context_parts, references = _build_context_and_references(sections)
                 context_text = "\n\n".join(context_parts)
@@ -971,7 +996,7 @@ async def generate_chat_responses(
                 context_tokens = _estimate_text_tokens(context_text)
                 if context_tokens > DOCS_CONTEXT_BUDGET_TOKENS:
                     context_text = await _map_reduce_summarize(
-                        context_parts, message, get_deepseek_llm()
+                        context_parts, search_query, get_deepseek_llm()
                     )
 
                 system_with_context = base_system + "\n\nCONTEXT:\n" + context_text
@@ -992,6 +1017,10 @@ async def generate_chat_responses(
 
             answer_parts: List[str] = []
             ollama_messages = _to_ollama_messages(final_messages)
+
+            _unload_retrieval_models()
+
+            yield f"data: {json.dumps({'status': 'generating_response'})}\n\n"
 
             async for chunk_text in stream_ollama_chat(ollama_messages):
                 if chunk_text:
