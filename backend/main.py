@@ -401,14 +401,14 @@ def _to_ollama_messages(messages: List[Any]) -> List[Dict[str, str]]:
     return ollama_messages
 
 
-async def stream_ollama_chat(messages: List[Dict[str, str]]):
+async def stream_ollama_chat(messages: List[Dict[str, str]], think: bool = False):
     model_name = os.getenv("OLLAMA_CHAT_MODEL", "qwen3.5:9b")
     num_gpu = int(os.getenv("OLLAMA_NUM_GPU", "-1"))
     payload = {
         "model": model_name,
         "messages": messages,
         "stream": True,
-        "think": False,
+        "think": think,
         "keep_alive": "5m",
         "options": {
             "temperature": 1,
@@ -456,6 +456,7 @@ class ChatRequest(BaseModel):
     message: str
     language: str = "en"
     session_id: str = "default"
+    think: bool = False
 
 
 def _safe_str(value: Any, default: str = "") -> str:
@@ -919,6 +920,7 @@ async def generate_chat_responses(
     message: str,
     language: str = "en",
     session_id: str = "default",
+    think: bool = False,
 ):
     normalized_session_id = _normalize_session_id(session_id)
     if normalized_session_id == "default":
@@ -945,75 +947,55 @@ async def generate_chat_responses(
                 await _compact_memory_if_needed(memory, get_deepseek_llm(), base_system)
                 memory_messages = _build_memory_messages(memory)
 
-            # First LLM call: let the model decide whether to search
-            messages_for_tool_decision = [
-                SystemMessage(content=base_system),
-                *memory_messages,
-            ]
-
-            tool_response = await get_deepseek_llm().ainvoke(
-                messages_for_tool_decision,
-                tools=[SEARCH_LEGAL_DB_TOOL],
-                tool_choice="auto",
-            )
-
             context_text = ""
             sections: List[Dict[str, Any]] = []
             references: List[Dict[str, Any]] = []
 
-            if tool_response.tool_calls:
-                tool_call = tool_response.tool_calls[0]
-                search_query = tool_call["args"].get("query", message)
-                print(f"Tool call: search_legal_database(query={search_query!r})")
-                yield f"data: {json.dumps({'status': 'searching_sources'})}\n\n"
+            search_query = message
+            print(f"Tool call: search_legal_database(query={search_query!r})")
+            yield f"data: {json.dumps({'status': 'searching_sources'})}\n\n"
 
-                from backend.services.embedding_service import get_embedding_service
+            from backend.services.embedding_service import get_embedding_service
 
-                if CHAT_MULTI_HYDE_ENABLED:
-                    multi_passages = await generate_multi_hyde_passages(
-                        search_query, get_deepseek_llm()
+            if CHAT_MULTI_HYDE_ENABLED:
+                multi_passages = await generate_multi_hyde_passages(
+                    search_query, get_deepseek_llm()
+                )
+                if multi_passages:
+                    print(
+                        f"[MultiHyDE] Using {len(multi_passages)} passages for retrieval"
                     )
-                    if multi_passages:
-                        print(
-                            f"[MultiHyDE] Using {len(multi_passages)} passages for retrieval"
-                        )
-                        sections = retrieve_sections_multi_hyde(multi_passages, search_query)
-                    else:
-                        print("[MultiHyDE] Falling back to single-HyDE")
+                    sections = retrieve_sections_multi_hyde(multi_passages, search_query)
+                else:
+                    print("[MultiHyDE] Falling back to single-HyDE")
 
-                if not sections:
-                    hyde_embedding = await generate_hyde_embeddings(
-                        search_query, get_deepseek_llm(), get_embedding_service()
-                    )
-                    print(f"[HyDE] Generated embedding (dim={len(hyde_embedding)})")
-                    sections = retrieve_sections_hyde(hyde_embedding, search_query)
+            if not sections:
+                hyde_embedding = await generate_hyde_embeddings(
+                    search_query, get_deepseek_llm(), get_embedding_service()
+                )
+                print(f"[HyDE] Generated embedding (dim={len(hyde_embedding)})")
+                sections = retrieve_sections_hyde(hyde_embedding, search_query)
 
-                yield f"data: {json.dumps({'status': 'analyzing_references'})}\n\n"
+            yield f"data: {json.dumps({'status': 'analyzing_references'})}\n\n"
 
-                context_parts, references = _build_context_and_references(sections)
-                context_text = "\n\n".join(context_parts)
+            context_parts, references = _build_context_and_references(sections)
+            context_text = "\n\n".join(context_parts)
 
-                context_tokens = _estimate_text_tokens(context_text)
-                if context_tokens > DOCS_CONTEXT_BUDGET_TOKENS:
-                    context_text = await _map_reduce_summarize(
-                        context_parts, search_query, get_deepseek_llm()
-                    )
+            context_tokens = _estimate_text_tokens(context_text)
+            if context_tokens > DOCS_CONTEXT_BUDGET_TOKENS:
+                context_text = await _map_reduce_summarize(
+                    context_parts, search_query, get_deepseek_llm()
+                )
 
-                system_with_context = base_system + "\n\nCONTEXT:\n" + context_text
+            system_with_context = base_system + "\n\nCONTEXT:\n" + context_text
 
-                async with memory.lock:
-                    memory_messages = _build_memory_messages(memory)
+            async with memory.lock:
+                memory_messages = _build_memory_messages(memory)
 
-                final_messages = [
-                    SystemMessage(content=system_with_context),
-                    *memory_messages,
-                ]
-            else:
-                print(f"No tool call — answering directly for: {message}")
-                final_messages = [
-                    SystemMessage(content=base_system),
-                    *memory_messages,
-                ]
+            final_messages = [
+                SystemMessage(content=system_with_context),
+                *memory_messages,
+            ]
 
             answer_parts: List[str] = []
             ollama_messages = _to_ollama_messages(final_messages)
@@ -1022,7 +1004,7 @@ async def generate_chat_responses(
 
             yield f"data: {json.dumps({'status': 'generating_response'})}\n\n"
 
-            async for chunk_text in stream_ollama_chat(ollama_messages):
+            async for chunk_text in stream_ollama_chat(ollama_messages, think=think):
                 if chunk_text:
                     answer_parts.append(chunk_text)
                     data = json.dumps({"answer": chunk_text})
@@ -1076,6 +1058,7 @@ async def chat(request: ChatRequest):
                 request.message,
                 request.language,
                 request.session_id,
+                think=request.think,
             ),
             media_type="text/event-stream",
         )

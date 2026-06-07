@@ -322,7 +322,16 @@ async def stream_ollama_chat_with_fallback(
                                 continue
                             data = json.loads(chunk_line)
                             message_obj = data.get("message", {})
-                            chunk_text = _safe_str(message_obj.get("content", ""), "")
+                            content_text = _safe_str(message_obj.get("content", ""), "")
+                            thinking_text = _safe_str(message_obj.get("thinking", ""), "")
+                            if thinking_text:
+                                print(f"[Ollama] Got thinking chunk: {thinking_text[:50]}...")
+                            if thinking_text and not content_text:
+                                chunk_text = f"<thinking>{thinking_text}</thinking>"
+                            elif thinking_text and content_text:
+                                chunk_text = f"<thinking>{thinking_text}</thinking>{content_text}"
+                            else:
+                                chunk_text = content_text
                             if chunk_text:
                                 emitted_any_chunk = True
                                 yield chunk_text
