@@ -12,11 +12,12 @@ Use executable sources first. If docs disagree with code/config, trust code/conf
 - Backend entry: `backend/main.py` (`if __name__ == "__main__": uvicorn.run(...)`).
 - Frontend entry: `frontend/src/main.jsx` (`createRoot(...).render(...)`).
 - API surface is only in `backend/main.py`: `GET /`, streaming `POST /chat`.
-- Retrieval core lives in `backend/services/vector_store.py` (`VectorStoreManager`).
+- Retrieval core lives in `backend/services/qdrant_store.py` (`QdrantStoreManager`).
 - Ollama failover/runtime probing lives in `backend/core/ollama_runtime.py`.
 - Frontend stream parse/session logic lives in `frontend/src/components/ChatInterface.jsx`.
 
 Prefer `backend/core/*` + `backend/services/*` over root-level duplicates (`backend/vector_store.py`, `backend/utils.py`, `backend/setup_env.py`, `backend/embedding_shared.py` are stale and not imported by `main.py`).
+- `backend/services/vector_store.py` contains the old Pinecone `VectorStoreManager`; it is not imported by `main.py`.
 
 ## Exact developer commands
 
@@ -84,8 +85,8 @@ python backend\tests\test_reranker_tokenizer_unicode.py
 
 ## Environment + runtime toggles that matter
 - Backend commonly does both `load_dotenv()` and explicit `backend/.env` loading; run from repo root to avoid cwd surprises.
-- Required for full chat/retrieval flow: `DEEPSEEK_API_KEY`, `PINECONE_API_KEY`.
-- Common toggles: `PINECONE_INDEX_NAME`, `OLLAMA_BASE_URL`, `OLLAMA_CHAT_MODEL`, `OLLAMA_HOST_GATEWAY`.
+- Required for full chat/retrieval flow: `DEEPSEEK_API_KEY`, `QDRANT_URL`, `QDRANT_API_KEY`, `QDRANT_COLLECTION_NAME`.
+- Common toggles: `OLLAMA_BASE_URL`, `OLLAMA_CHAT_MODEL`, `OLLAMA_HOST_GATEWAY`.
 - See `backend/.env.example` for the full set of env vars and defaults.
 
 ## Known stale scripts

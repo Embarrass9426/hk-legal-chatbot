@@ -304,7 +304,7 @@ async def post_ollama_chat_with_fallback(
 async def stream_ollama_chat_with_fallback(
     payload: Dict[str, Any], configured_base_url: str
 ) -> AsyncGenerator[str, None]:
-    timeout = httpx.Timeout(120.0, connect=5.0)
+    timeout = httpx.Timeout(300.0 if payload.get("think") else 120.0, connect=5.0)
     errors: List[str] = []
 
     for round_index in range(2):

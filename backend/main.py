@@ -404,6 +404,8 @@ def _to_ollama_messages(messages: List[Any]) -> List[Dict[str, str]]:
 async def stream_ollama_chat(messages: List[Dict[str, str]], think: bool = False):
     model_name = os.getenv("OLLAMA_CHAT_MODEL", "qwen3.5:9b")
     num_gpu = int(os.getenv("OLLAMA_NUM_GPU", "-1"))
+    base_predict = int(os.getenv("OLLAMA_NUM_PREDICT", "2048"))
+    num_predict = base_predict * 2 if think else base_predict
     payload = {
         "model": model_name,
         "messages": messages,
@@ -413,7 +415,7 @@ async def stream_ollama_chat(messages: List[Dict[str, str]], think: bool = False
         "options": {
             "temperature": 1,
             "num_ctx": 128000,
-            "num_predict": 2048,
+            "num_predict": num_predict,
             "num_gpu": num_gpu,
         },
     }
